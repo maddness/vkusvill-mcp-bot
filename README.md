@@ -2,6 +2,10 @@
 
 Telegram-бот для сбора продуктовых корзин ВкусВилл с использованием AI.
 
+<p align="center">
+  <img src="assets/pic.jpg" alt="Demo" width="400">
+</p>
+
 ## Что делает бот
 
 - Принимает запросы на сбор продуктов (например, "Собери корзину для салата оливье")
@@ -21,7 +25,7 @@ Telegram-бот для сбора продуктовых корзин ВкусВ
 ### 1. Клонировать репозиторий
 
 ```bash
-git clone https://github.com/your-username/vkusvill-mcp-bot.git
+git clone https://github.com/maddness/vkusvill-mcp-bot.git
 cd vkusvill-mcp-bot
 ```
 
