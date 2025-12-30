@@ -308,7 +308,7 @@ async def handle_message(message: Message):
             keyboard = None
             if "vkusvill.ru" in response:
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="Собрать новую корзину", callback_data="new_basket")]
+                    [InlineKeyboardButton(text="🛒 Собрать новую корзину", callback_data="new_basket")]
                 ])
 
             try:
