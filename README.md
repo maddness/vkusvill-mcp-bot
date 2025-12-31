@@ -67,6 +67,19 @@ source venv/bin/activate && python main.py
 
 ## Деплой на сервер
 
+### Требования к сетевому доступу
+
+Сервер должен иметь исходящий доступ к следующим ресурсам:
+
+| Ресурс | Порт | Назначение |
+|--------|------|------------|
+| `github.com` | 443 | Клонирование репозитория |
+| `pypi.org`, `files.pythonhosted.org` | 443 | Установка Python-пакетов |
+| `api.telegram.org` | 443 | Telegram Bot API |
+| `mcp001.vkusvill.ru` | 443 | MCP сервер ВкусВилл |
+| `openai-hub.neuraldeep.tech` | 443 | API для Claude (haiku) |
+| `4090-2-48.neuraldeep.tech` | 443 | API для Qwen (опционально) |
+
 ### 1. Подключиться к серверу
 ```bash
 ssh user@your-server-ip
