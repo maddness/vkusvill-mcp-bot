@@ -18,7 +18,7 @@ Telegram-бот для сбора продуктовых корзин ВкусВ
 - **[OpenAI Agents SDK](https://github.com/openai/openai-agents-python)** — агентский фреймворк с поддержкой MCP
 - **[LiteLLM](https://github.com/BerriAI/litellm)** — прокси для работы с разными LLM через OpenAI-совместимый интерфейс
 - **[aiogram](https://github.com/aiogram/aiogram)** — асинхронный Telegram Bot API
-- **Claude Haiku 4.5** или **Qwen 3** — языковые модели на выбор
+- **Claude Haiku 4.5** — языковая модель
 
 ## Установка и запуск
 
@@ -56,10 +56,8 @@ cp .env.example .env
 |------------|----------|
 | `TELEGRAM_BOT_TOKEN` | Токен бота от [@BotFather](https://t.me/BotFather) |
 | `ANTHROPIC_API_KEY` | API ключ для Claude |
-| `QWEN_API_KEY` | API ключ для Qwen (опционально) |
-| `MODEL` | Выбор модели: `haiku` или `qwen` (по умолчанию `haiku`) |
-| `HAIKU_API_BASE` | URL API для Claude |
-| `QWEN_API_BASE` | URL API для Qwen |
+| `MODEL` | Название модели (по умолчанию `litellm/openai/claude-haiku-4-5`) |
+| `API_BASE` | URL API для LLM |
 | `MCP_URL` | URL MCP сервера ВкусВилл |
 
 ### 5. Запустить бота
@@ -80,8 +78,7 @@ source venv/bin/activate && python main.py
 | `pypi.org`, `files.pythonhosted.org` | 443 | Установка Python-пакетов |
 | `api.telegram.org` | 443 | Telegram Bot API |
 | `mcp001.vkusvill.ru` | 443 | MCP сервер ВкусВилл |
-| `openai-hub.neuraldeep.tech` | 443 | API для Claude (haiku) |
-| `4090-2-48.neuraldeep.tech` | 443 | API для Qwen (опционально) |
+| `openai-hub.neuraldeep.tech` | 443 | API для Claude |
 
 ### 1. Подключиться к серверу
 ```bash
@@ -106,7 +103,7 @@ pip install -r requirements.txt
 ### 4. Настроить переменные окружения
 ```bash
 cp .env.example .env
-nano .env  # заполнить токены и выбрать модель
+nano .env  # заполнить токены
 ```
 
 ### 5. Запустить бота в фоне

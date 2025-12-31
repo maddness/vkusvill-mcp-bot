@@ -23,30 +23,17 @@ load_dotenv()
 
 os.environ["SSL_VERIFY"] = "false"
 
-# Конфиг моделей
-MODEL_CONFIGS = {
-    "haiku": {
-        "model": "litellm/openai/claude-haiku-4-5",
-        "api_base": os.environ.get("HAIKU_API_BASE", "https://openai-hub.neuraldeep.tech/v1"),
-        "api_key": os.environ.get("ANTHROPIC_API_KEY"),
-    },
-    "qwen": {
-        "model": "litellm/openai/qwen3-30b-a3b-instruct-2507",
-        "api_base": os.environ.get("QWEN_API_BASE", "https://4090-2-48.neuraldeep.tech/v1"),
-        "api_key": os.environ.get("QWEN_API_KEY"),
-    },
-}
+# Конфиг модели
+MODEL_NAME = os.environ.get("MODEL", "litellm/openai/claude-haiku-4-5")
+API_BASE = os.environ.get("API_BASE", "https://openai-hub.neuraldeep.tech/v1")
+API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
-# Выбор модели: "haiku" или "qwen"
-ACTIVE_MODEL = os.environ.get("MODEL", "haiku")
-model_config = MODEL_CONFIGS[ACTIVE_MODEL]
+if API_BASE:
+    os.environ["OPENAI_API_BASE"] = API_BASE
+if API_KEY:
+    os.environ["OPENAI_API_KEY"] = API_KEY
 
-if model_config["api_base"]:
-    os.environ["OPENAI_API_BASE"] = model_config["api_base"]
-if model_config["api_key"]:
-    os.environ["OPENAI_API_KEY"] = model_config["api_key"]
-
-log.info(f"🤖 Модель: {ACTIVE_MODEL} ({model_config['model']})")
+log.info(f"🤖 Модель: {MODEL_NAME}")
 
 bot = Bot(token=os.environ["TELEGRAM_BOT_TOKEN"])
 dp = Dispatcher()
@@ -259,31 +246,11 @@ async def run_agent(user_id: int, user_message: str, send_progress) -> str:
     if len(sessions[user_id]) > MAX_HISTORY_MESSAGES:
         sessions[user_id] = sessions[user_id][-MAX_HISTORY_MESSAGES:]
 
-    # Настройки модели
     settings = ModelSettings(include_usage=True)
-    if ACTIVE_MODEL == "haiku":
-        # Prompt caching для Anthropic
-        settings = ModelSettings(
-            include_usage=True,
-            extra_headers={
-                "anthropic-beta": "prompt-caching-2024-07-31"
-            },
-            extra_body={
-                "cache_control_injection_points": [
-                    {"location": "message", "role": "system"},
-                    {"location": "tool", "index": -1}
-                ]
-            }
-        )
-    elif ACTIVE_MODEL == "qwen":
-        settings = ModelSettings(
-            include_usage=True,
-            extra_body={"chat_template_kwargs": {"enable_thinking": True}}
-        )
 
     agent = Agent(
         name="VkusVill Assistant",
-        model=model_config["model"],
+        model=MODEL_NAME,
         instructions=SYSTEM_PROMPT,
         tools=[search_products, create_cart],
         model_settings=settings,
