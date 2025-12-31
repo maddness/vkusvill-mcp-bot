@@ -27,12 +27,12 @@ os.environ["SSL_VERIFY"] = "false"
 MODEL_CONFIGS = {
     "haiku": {
         "model": "litellm/openai/claude-haiku-4-5",
-        "api_base": "https://openai-hub.neuraldeep.tech/v1",
+        "api_base": os.environ.get("HAIKU_API_BASE", "https://openai-hub.neuraldeep.tech/v1"),
         "api_key": os.environ.get("ANTHROPIC_API_KEY"),
     },
     "qwen": {
         "model": "litellm/openai/qwen3-30b-a3b-instruct-2507",
-        "api_base": "https://4090-2-48.neuraldeep.tech/v1",
+        "api_base": os.environ.get("QWEN_API_BASE", "https://4090-2-48.neuraldeep.tech/v1"),
         "api_key": os.environ.get("QWEN_API_KEY"),
     },
 }
@@ -54,7 +54,7 @@ sessions: dict[int, list] = {}
 user_locks: dict[int, asyncio.Lock] = {}
 
 MAX_HISTORY_MESSAGES = 10
-MCP_URL = "https://mcp001.vkusvill.ru/mcp"
+MCP_URL = os.environ.get("MCP_URL", "https://mcp001.vkusvill.ru/mcp")
 
 SYSTEM_PROMPT = """Ты помощник для сбора продуктовых корзин ВкусВилл.
 

@@ -55,9 +55,12 @@ cp .env.example .env
 | Переменная | Описание |
 |------------|----------|
 | `TELEGRAM_BOT_TOKEN` | Токен бота от [@BotFather](https://t.me/BotFather) |
-| `ANTHROPIC_API_KEY` | API ключ от [Anthropic](https://console.anthropic.com/) |
+| `ANTHROPIC_API_KEY` | API ключ для Claude |
 | `QWEN_API_KEY` | API ключ для Qwen (опционально) |
 | `MODEL` | Выбор модели: `haiku` или `qwen` (по умолчанию `haiku`) |
+| `HAIKU_API_BASE` | URL API для Claude |
+| `QWEN_API_BASE` | URL API для Qwen |
+| `MCP_URL` | URL MCP сервера ВкусВилл |
 
 ### 5. Запустить бота
 
