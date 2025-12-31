@@ -16,9 +16,9 @@ Telegram-бот для сбора продуктовых корзин ВкусВ
 ## Стек
 
 - **[OpenAI Agents SDK](https://github.com/openai/openai-agents-python)** — агентский фреймворк с поддержкой MCP
-- **[LiteLLM](https://github.com/BerriAI/litellm)** — прокси для работы с Claude через OpenAI-совместимый интерфейс
+- **[LiteLLM](https://github.com/BerriAI/litellm)** — прокси для работы с разными LLM через OpenAI-совместимый интерфейс
 - **[aiogram](https://github.com/aiogram/aiogram)** — асинхронный Telegram Bot API
-- **Claude Haiku 4.5** — языковая модель
+- **Claude Haiku 4.5** или **Qwen 3** — языковые модели на выбор
 
 ## Установка и запуск
 
@@ -56,6 +56,8 @@ cp .env.example .env
 |------------|----------|
 | `TELEGRAM_BOT_TOKEN` | Токен бота от [@BotFather](https://t.me/BotFather) |
 | `ANTHROPIC_API_KEY` | API ключ от [Anthropic](https://console.anthropic.com/) |
+| `QWEN_API_KEY` | API ключ для Qwen (опционально) |
+| `MODEL` | Выбор модели: `haiku` или `qwen` (по умолчанию `haiku`) |
 
 ### 5. Запустить бота
 
