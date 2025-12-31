@@ -94,9 +94,7 @@ SYSTEM_PROMPT = """Ты помощник для сбора продуктовы�
 
 ✨ Приятных покупок!
 
-Формат: *жирный* для цен, эмодзи для каждого товара, [текст](url) для ссылок.
-
-/no_think"""
+Формат: *жирный* для цен, эмодзи для каждого товара, [текст](url) для ссылок."""
 
 set_default_openai_api("chat_completions")
 set_tracing_disabled(True)
@@ -187,7 +185,7 @@ mcp = MCPClient(MCP_URL)
 # Кастомные tools с фильтрацией данных
 @function_tool
 async def search_products(query: str) -> str:
-    """Поиск товаров ВкусВилл по названию. Возвращает список товаров с id, названием и ценой."""
+    """Поиск товаров ВкусВилл по названию. Возвращает список товаров с xml_id, названием, ценой и рейтингом (rating)."""
     log.info(f"🔍 Поиск: {query}")
     result = await mcp.call("vkusvill_products_search", {"q": query})
 
@@ -211,7 +209,7 @@ async def search_products(query: str) -> str:
 
         # Оставляем только: xml_id, name, price, rating (минимум для корзины)
         filtered = []
-        for p in products[:5]:  # Берём только 5 товаров
+        for p in products[:2]:  # Берём только 2 товара для экономии токенов
             rating = p.get("rating", {})
             filtered.append({
                 "xml_id": p.get("xml_id"),
@@ -263,10 +261,24 @@ async def run_agent(user_id: int, user_message: str, send_progress) -> str:
 
     # Настройки модели
     settings = ModelSettings(include_usage=True)
-    if ACTIVE_MODEL == "qwen":
+    if ACTIVE_MODEL == "haiku":
+        # Prompt caching для Anthropic
         settings = ModelSettings(
             include_usage=True,
-            extra_body={"chat_template_kwargs": {"enable_thinking": False}}
+            extra_headers={
+                "anthropic-beta": "prompt-caching-2024-07-31"
+            },
+            extra_body={
+                "cache_control_injection_points": [
+                    {"location": "message", "role": "system"},
+                    {"location": "tool", "index": -1}
+                ]
+            }
+        )
+    elif ACTIVE_MODEL == "qwen":
+        settings = ModelSettings(
+            include_usage=True,
+            extra_body={"chat_template_kwargs": {"enable_thinking": True}}
         )
 
     agent = Agent(
@@ -291,12 +303,29 @@ async def run_agent(user_id: int, user_message: str, send_progress) -> str:
 
     final = result.final_output
 
+    # Логируем raw output для отладки
+    log.info(f"🔍 Raw output (первые 500 симв.): {repr(final[:500]) if final else 'empty'}")
+
     # Логируем использование токенов
     try:
         usage = result.context_wrapper.usage
-        log.info(f"📊 Токены: input={usage.input_tokens}, output={usage.output_tokens}, total={usage.total_tokens}")
+        cache_info = ""
+        if hasattr(usage, 'cache_creation_input_tokens') and usage.cache_creation_input_tokens:
+            cache_info += f", cache_write={usage.cache_creation_input_tokens}"
+        if hasattr(usage, 'cache_read_input_tokens') and usage.cache_read_input_tokens:
+            cache_info += f", cache_read={usage.cache_read_input_tokens}"
+        log.info(f"📊 Токены: input={usage.input_tokens}, output={usage.output_tokens}, total={usage.total_tokens}{cache_info}")
     except:
         pass
+
+    # Логируем наличие thinking
+    if "<think>" in final:
+        think_end = final.find("</think>")
+        if think_end > 0:
+            think_content = final[final.find("<think>")+7:think_end]
+            log.info(f"🧠 Thinking ({len(think_content)} симв.): {think_content[:200]}...")
+            # Убираем thinking из финального ответа
+            final = final[think_end+8:].strip()
 
     sessions[user_id].append({"role": "assistant", "content": final})
     log.info(f"✅ Ответ готов ({len(final)} символов)")
