@@ -65,6 +65,52 @@ cp .env.example .env
 source venv/bin/activate && python main.py
 ```
 
+## Деплой на сервер
+
+### 1. Подключиться к серверу
+```bash
+ssh user@your-server-ip
+```
+
+### 2. Установить Python (если не установлен)
+```bash
+sudo apt update
+sudo apt install python3 python3-venv python3-pip -y
+```
+
+### 3. Клонировать репозиторий и установить зависимости
+```bash
+git clone https://github.com/maddness/vkusvill-mcp-bot.git
+cd vkusvill-mcp-bot
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 4. Настроить переменные окружения
+```bash
+cp .env.example .env
+nano .env  # заполнить токены и выбрать модель
+```
+
+### 5. Запустить бота в фоне
+```bash
+source venv/bin/activate
+nohup python main.py >> bot.log 2>&1 &
+```
+
+### 6. Управление ботом
+```bash
+# Просмотр логов
+tail -f bot.log
+
+# Найти процесс
+ps aux | grep main.py
+
+# Остановить бота
+pkill -f "python main.py"
+```
+
 ## Команды бота
 
 | Команда | Описание |
