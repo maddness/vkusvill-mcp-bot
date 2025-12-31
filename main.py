@@ -235,8 +235,8 @@ def get_user_lock(user_id: int) -> asyncio.Lock:
     return user_locks[user_id]
 
 
-async def run_agent(user_id: int, user_message: str, send_progress) -> str:
-    log.info(f"👤 User {user_id}: {user_message[:50]}...")
+async def run_agent(user_id: int, username: str, user_message: str, send_progress) -> str:
+    log.info(f"👤 {username} ({user_id}): {user_message}")
 
     if user_id not in sessions:
         sessions[user_id] = []
@@ -346,7 +346,8 @@ async def handle_message(message: Message):
         await send_progress("Думаю...")
 
         try:
-            response = await run_agent(user_id, message.text, send_progress)
+            username = message.from_user.username or message.from_user.full_name
+            response = await run_agent(user_id, username, message.text, send_progress)
 
             if progress_msg:
                 try:
