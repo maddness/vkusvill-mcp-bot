@@ -26,8 +26,8 @@ os.environ["SSL_VERIFY"] = "false"
 # Конфиг моделей
 MODEL_CONFIGS = {
     "haiku": {
-        "model": "litellm/anthropic/claude-haiku-4-5-20251001",
-        "api_base": None,
+        "model": "litellm/openai/claude-haiku-4-5",
+        "api_base": "https://openai-hub.neuraldeep.tech/v1",
         "api_key": os.environ.get("ANTHROPIC_API_KEY"),
     },
     "qwen": {
