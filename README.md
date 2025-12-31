@@ -62,7 +62,7 @@ cp .env.example .env
 ### 5. Запустить бота
 
 ```bash
-python main.py
+source venv/bin/activate && python main.py
 ```
 
 ## Команды бота
