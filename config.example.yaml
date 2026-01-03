@@ -14,6 +14,13 @@ llm:
 mcp:
   url: "https://mcp001.vkusvill.ru/mcp"
 
+whisper:
+  api_url: "YOUR_WHISPER_API_URL"  # URL вашего Whisper API
+  api_key: "YOUR_WHISPER_API_KEY"  # API ключ для Whisper
+  model: "whisper-1"
+  max_file_size_mb: 20  # Maximum voice message size in MB
+  max_duration_seconds: 180  # Maximum duration 3 minutes
+
 bot:
   max_history_messages: 20  # 10 pairs of request-response
   stream_update_interval: 1.0  # seconds between message updates
