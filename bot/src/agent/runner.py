@@ -9,7 +9,7 @@ from agents import Agent, Runner, ModelSettings
 from typing import Callable, Optional
 
 from ..utils.config import config
-from ..mcp.tools import create_mcp_tools
+from ..mcp.tools import create_mcp_tools, set_cart_storage
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +32,7 @@ class SessionData:
         self.messages = []
         self.last_tokens = None
         self.tools_used = []
+        self.cart_products: dict[str, int] = {}  # name -> id mapping for quick lookup
 
 
 class AgentRunner:
@@ -58,10 +59,20 @@ class AgentRunner:
             self.sessions[session_key] = SessionData()
         
         session = self.sessions[session_key]
-        
+
         # Reset tools tracking for this run
         session.tools_used = []
-        
+
+        # Set up cart storage for this session
+        set_cart_storage(session.cart_products)
+
+        # Build cart context if we have products
+        cart_context = ""
+        if session.cart_products:
+            items = [f"{name}(id:{pid})" for name, pid in session.cart_products.items()]
+            cart_context = f"\n\n[Товары в корзине: {', '.join(items)}]"
+            log.info(f"📦 Контекст корзины: {len(session.cart_products)} товаров")
+
         # Format user message with template if it's the first message
         if len(session.messages) == 0:
             current_date = datetime.now().strftime("%d.%m.%Y")
@@ -69,9 +80,9 @@ class AgentRunner:
                 current_date=current_date,
                 task=user_message
             )
-            session.messages.append({"role": "user", "content": formatted_message})
+            session.messages.append({"role": "user", "content": formatted_message + cart_context})
         else:
-            session.messages.append({"role": "user", "content": user_message})
+            session.messages.append({"role": "user", "content": user_message + cart_context})
         
         if len(session.messages) > config.max_history_messages:
             session.messages = session.messages[-config.max_history_messages:]
@@ -220,16 +231,25 @@ class AgentRunner:
             self.sessions[session_key] = SessionData()
         
         session = self.sessions[session_key]
-        
+
         # Reset tools tracking for this run
         session.tools_used = []
-        
+
+        # Set up cart storage for this session
+        set_cart_storage(session.cart_products)
+
+        # Build cart context if we have products
+        cart_context = ""
+        if session.cart_products:
+            items = [f"{name}(id:{pid})" for name, pid in session.cart_products.items()]
+            cart_context = f"\n\n[Товары в корзине: {', '.join(items)}]"
+
         # Format message with image (используем input_text и input_image для OpenAI Agents SDK)
         message_content = [
-            {"type": "input_text", "text": user_message},
+            {"type": "input_text", "text": user_message + cart_context},
             {"type": "input_image", "image_url": f"data:image/jpeg;base64,{image_base64}"}
         ]
-        
+
         # Format user message with template if it's the first message
         if len(session.messages) == 0:
             current_date = datetime.now().strftime("%d.%m.%Y")
@@ -237,8 +257,8 @@ class AgentRunner:
                 current_date=current_date,
                 task=user_message
             )
-            message_content[0]["text"] = formatted_text
-        
+            message_content[0]["text"] = formatted_text + cart_context
+
         session.messages.append({"role": "user", "content": message_content})
         
         if len(session.messages) > config.max_history_messages:
