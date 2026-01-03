@@ -88,7 +88,7 @@ telegram:
 llm:
   model: "litellm/openai/claude-haiku-4-5"
   api_key: "YOUR_API_KEY"
-  api_base: "https://openai-hub.neuraldeep.tech/v1"
+  api_base: "YOUR_API_BASE_URL"  # URL вашего LLM API
 
 mcp:
   url: "https://mcp001.vkusvill.ru/mcp"

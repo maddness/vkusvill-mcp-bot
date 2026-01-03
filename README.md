@@ -48,7 +48,7 @@ telegram:
 llm:
   model: "litellm/openai/claude-haiku-4-5"
   api_key: "YOUR_API_KEY"  # API ключ для Claude
-  api_base: "https://openai-hub.neuraldeep.tech/v1"
+  api_base: "YOUR_API_BASE_URL"  # URL вашего LLM API
 
 mcp:
   url: "https://mcp001.vkusvill.ru/mcp"
@@ -111,7 +111,7 @@ python app.py
 | `pypi.org`, `files.pythonhosted.org` | 443 | Установка Python-пакетов |
 | `api.telegram.org` | 443 | Telegram Bot API |
 | `mcp001.vkusvill.ru` | 443 | MCP сервер ВкусВилл |
-| `openai-hub.neuraldeep.tech` | 443 | API для Claude |
+| Ваш LLM API | 443 | API для языковой модели |
 
 ### 1. Подключиться к серверу
 ```bash
