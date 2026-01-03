@@ -44,6 +44,26 @@ class Config:
         return self._config['mcp']['url']
     
     @property
+    def whisper_api_url(self) -> str:
+        return self._config.get('whisper', {}).get('api_url', '')
+    
+    @property
+    def whisper_api_key(self) -> str:
+        return self._config.get('whisper', {}).get('api_key', '')
+    
+    @property
+    def whisper_model(self) -> str:
+        return self._config.get('whisper', {}).get('model', 'whisper-1')
+    
+    @property
+    def whisper_max_file_size_mb(self) -> int:
+        return self._config.get('whisper', {}).get('max_file_size_mb', 20)
+    
+    @property
+    def whisper_max_duration_seconds(self) -> int:
+        return self._config.get('whisper', {}).get('max_duration_seconds', 180)
+    
+    @property
     def max_history_messages(self) -> int:
         return self._config['bot']['max_history_messages']
     
