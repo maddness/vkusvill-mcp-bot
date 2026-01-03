@@ -12,10 +12,10 @@ def create_mcp_tools(mcp_url: str):
     mcp = MCPClient(mcp_url)
     
     @function_tool
-    async def search_products(query: str) -> str:
-        """Поиск товаров ВкусВилл по названию. Возвращает список товаров с xml_id, названием, ценой и рейтингом."""
-        log.info(f"🔍 Поиск: {query}")
-        result = await mcp.call("vkusvill_products_search", {"q": query})
+    async def search_products(query: str, page: int = 1) -> str:
+        """Поиск товаров ВкусВилл по названию. Возвращает список товаров с id, xml_id, названием, ценой и рейтингом. page - номер страницы (10 товаров на страницу)."""
+        log.info(f"🔍 Поиск: {query} (страница {page})")
+        result = await mcp.call("vkusvill_products_search", {"q": query, "page": page, "sort": "popularity"})
         
         content = result.get("content", [])
         if not content:
@@ -31,15 +31,17 @@ def create_mcp_tools(mcp_url: str):
             if not products:
                 products = data if isinstance(data, list) else []
             
-            # Filter only necessary fields
+            # Return more fields including id for vkusvill_product_details
             filtered = []
-            for p in products[:2]:  # Take only 2 products to save tokens
+            for p in products:
                 rating = p.get("rating", {})
                 filtered.append({
-                    "xml_id": p.get("xml_id"),
-                    "name": p.get("name", "")[:50],  # Truncate name
+                    "id": p.get("id"),  # Для vkusvill_product_details
+                    "xml_id": p.get("xml_id"),  # Для корзины
+                    "name": p.get("name", ""),
                     "price": p.get("price"),
-                    "rating": rating.get("average") if rating else None
+                    "rating": rating.get("average") if rating else None,
+                    "url": p.get("url", "")  # Возможно есть прямая ссылка
                 })
             log.info(f"✅ Найдено {len(filtered)} товаров")
             return json.dumps(filtered, ensure_ascii=False) if filtered else "Товары не найдены"
