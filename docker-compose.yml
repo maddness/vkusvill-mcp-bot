@@ -8,9 +8,17 @@ services:
       - ./bot:/app/bot
       - ./config.yaml:/app/config.yaml
       - ./prompts:/app/prompts
-      - ./assets:/app/assets
       - ./logs:/app/logs
       - ./db:/app/db
+      - ./assets:/app/assets
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - MODEL=${MODEL:-litellm/openai/claude-haiku-4-5}
+      - API_BASE=${API_BASE:-https://openai-hub.neuraldeep.tech/v1}
+      - MCP_URL=${MCP_URL:-https://mcp001.vkusvill.ru/mcp}
+    env_file:
+      - .env
     logging:
       driver: "json-file"
       options:

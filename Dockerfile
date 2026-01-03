@@ -10,8 +10,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 COPY bot/ ./bot/
 COPY assets/ ./assets/
-COPY prompts/ ./prompts/
 COPY config.yaml .
+COPY prompts/ ./prompts/
 
 # Run bot
 CMD ["python", "app.py"]
