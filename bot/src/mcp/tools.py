@@ -87,7 +87,8 @@ def create_mcp_tools(mcp_url: str):
                 "name": product.get("name", "").replace("&nbsp;", " "),
                 "price": product.get("price", {}).get("current"),
                 "brand": product.get("brand"),
-                "rating": product.get("rating", {}).get("average")
+                "rating": product.get("rating", {}).get("average"),
+                "url": product.get("url")  # Ссылка на страницу товара
             }
 
             # Добавляем первое фото (large размер)
