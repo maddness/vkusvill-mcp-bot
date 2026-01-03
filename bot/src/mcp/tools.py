@@ -90,6 +90,11 @@ def create_mcp_tools(mcp_url: str):
                 "rating": product.get("rating", {}).get("average")
             }
 
+            # Добавляем первое фото (medium размер)
+            images = product.get("images", [])
+            if images and len(images) > 0:
+                info["image_url"] = images[0].get("medium") or images[0].get("large")
+
             # Извлекаем свойства (КБЖУ, состав, срок годности и т.д.)
             properties = product.get("properties", [])
             for prop in properties:
