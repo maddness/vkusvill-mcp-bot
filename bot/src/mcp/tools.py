@@ -10,15 +10,24 @@ log = logging.getLogger(__name__)
 # Context-local storage for cart products (thread/async-safe)
 _cart_storage_var: ContextVar[dict[str, int]] = ContextVar('cart_storage', default={})
 
+# Temporary lookup for search results: xml_id -> {name, id}
+_search_results_var: ContextVar[dict[int, dict]] = ContextVar('search_results', default={})
+
 
 def set_cart_storage(storage: dict[str, int]):
     """Set the cart storage dict for current async context"""
     _cart_storage_var.set(storage)
+    _search_results_var.set({})  # Reset search results too
 
 
 def get_cart_storage() -> dict[str, int]:
     """Get the cart storage dict for current async context"""
     return _cart_storage_var.get()
+
+
+def get_search_results() -> dict[int, dict]:
+    """Get temporary search results lookup"""
+    return _search_results_var.get()
 
 
 def create_mcp_tools(mcp_url: str):
@@ -52,14 +61,12 @@ def create_mcp_tools(mcp_url: str):
                 product_id = p.get("id")
                 product_name = p.get("name", "")
 
-                # Store first product in cart storage for quick lookup
-                if product_id and product_name and page == 1:
-                    # Normalize name for lookup (lowercase, first significant words)
+                # Store in temporary search results for cart lookup
+                xml_id = p.get("xml_id")
+                if product_id and product_name and xml_id:
+                    search_results = get_search_results()
                     name_key = product_name.lower().split(",")[0].strip()
-                    cart_storage = get_cart_storage()
-                    if name_key not in cart_storage:
-                        cart_storage[name_key] = product_id
-                        log.debug(f"📦 Сохранён товар: {name_key} -> {product_id}")
+                    search_results[xml_id] = {"name": name_key, "id": product_id}
 
                 filtered.append({
                     "id": product_id,  # Для vkusvill_product_details
@@ -84,7 +91,18 @@ def create_mcp_tools(mcp_url: str):
             log.error("❌ Неверный JSON для корзины")
             return "Ошибка: неверный формат JSON"
 
-        log.info(f"🛒 Создаю корзину: {len(products)} товаров")
+        # Update cart_storage with only products in this cart
+        cart_storage = get_cart_storage()
+        cart_storage.clear()  # Clear previous cart
+        search_results = get_search_results()
+
+        for p in products:
+            xml_id = p.get("xml_id")
+            if xml_id and xml_id in search_results:
+                info = search_results[xml_id]
+                cart_storage[info["name"]] = info["id"]
+
+        log.info(f"🛒 Создаю корзину: {len(products)} товаров, сохранено {len(cart_storage)} для контекста")
         result = await mcp.call("vkusvill_cart_link_create", {"products": products})
 
         content = result.get("content", [])
