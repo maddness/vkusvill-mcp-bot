@@ -33,7 +33,7 @@ def create_mcp_tools(mcp_url: str):
             
             # Filter only necessary fields
             filtered = []
-            for p in products[:2]:  # Take only 2 products to save tokens
+            for p in products[:10]:  # Take up to 10 products for better search coverage
                 rating = p.get("rating", {})
                 filtered.append({
                     "xml_id": p.get("xml_id"),
@@ -64,6 +64,27 @@ def create_mcp_tools(mcp_url: str):
             return content[0].get("text", "Ошибка создания корзины")
         return "Ошибка создания корзины"
     
-    return [search_products, create_cart]
+    @function_tool
+    async def get_product_link(xml_id: int) -> str:
+        """Получить прямую ссылку на товар ВкусВилл по xml_id. Возвращает URL на страницу товара."""
+        log.info(f"🔗 Получаю ссылку на товар: {xml_id}")
+        result = await mcp.call("vkusvill_product_link", {"xml_id": xml_id})
+        
+        content = result.get("content", [])
+        if content:
+            link = content[0].get("text", "")
+            if link:
+                log.info(f"✅ Ссылка получена: {link}")
+                return link
+        
+        log.warning(f"⚠️ Не удалось получить ссылку, создаю через корзину")
+        # Fallback: создаём корзину с одним товаром
+        cart_result = await mcp.call("vkusvill_cart_link_create", {"products": [{"xml_id": xml_id, "q": 1}]})
+        cart_content = cart_result.get("content", [])
+        if cart_content:
+            return f"Ссылка через корзину: {cart_content[0].get('text', '')}"
+        return f"Ошибка получения ссылки для товара {xml_id}"
+    
+    return [search_products, create_cart, get_product_link]
 
 
