@@ -1,0 +1,22 @@
+# VkusVill Bot Configuration Example
+# Copy this file to config.yaml and fill in your values
+
+telegram:
+  bot_token: "YOUR_BOT_TOKEN_HERE"
+  admin_ids:
+    - 123456789  # Replace with your Telegram user ID
+
+llm:
+  model: "litellm/openai/claude-haiku-4-5"
+  api_key: "YOUR_API_KEY_HERE"
+  api_base: "https://openai-hub.neuraldeep.tech/v1"
+
+mcp:
+  url: "https://mcp001.vkusvill.ru/mcp"
+
+bot:
+  max_history_messages: 20  # 10 pairs of request-response
+  stream_update_interval: 1.0  # seconds between message updates
+  stream_min_chars: 50  # minimum characters before streaming update
+
+
