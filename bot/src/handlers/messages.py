@@ -8,12 +8,18 @@ from aiogram.enums import ParseMode
 
 from ..agent.runner import AgentRunner
 from ..utils.config import config
+from ..utils.logger import AgentLogger
+from ..utils.database import UserDatabase
 
 log = logging.getLogger(__name__)
 
 router = Router()
 agent_runner = AgentRunner()
 user_locks: dict[int, asyncio.Lock] = {}
+
+# Инициализируем логгер и БД
+agent_logger = AgentLogger()
+user_db = UserDatabase()
 
 
 def get_user_lock(user_id: int) -> asyncio.Lock:
@@ -51,6 +57,15 @@ async def handle_message(message: Message):
     user_id = message.from_user.id
     lock = get_user_lock(user_id)
     
+    # Регистрируем пользователя в БД
+    user_db.add_user(
+        user_id=user_id,
+        username=message.from_user.username,
+        first_name=message.from_user.first_name,
+        last_name=message.from_user.last_name
+    )
+    user_db.log_interaction(user_id)
+    
     if lock.locked():
         await message.answer("⏳ Подожди, обрабатываю предыдущий запрос...")
         return
@@ -59,6 +74,9 @@ async def handle_message(message: Message):
         progress_msg = None
         stream_msg = None
         is_streaming = False
+        tools_used = []
+        tokens_info = None
+        error_text = None
         
         async def send_progress(text: str):
             nonlocal progress_msg
@@ -135,6 +153,15 @@ async def handle_message(message: Message):
             thread_id = message.message_thread_id or 0
             response = await agent_runner.run(user_id, username, message.text, send_progress, stream_text, thread_id)
             
+            # Получаем информацию о токенах и использованных инструментах
+            session_key = f"{user_id}:{thread_id}"
+            if session_key in agent_runner.sessions:
+                session = agent_runner.sessions[session_key]
+                if hasattr(session, 'last_tokens'):
+                    tokens_info = session.last_tokens
+                if hasattr(session, 'tools_used'):
+                    tools_used = session.tools_used
+            
             if progress_msg:
                 try:
                     await progress_msg.delete()
@@ -160,10 +187,32 @@ async def handle_message(message: Message):
                 except:
                     await message.answer(response, reply_markup=keyboard)
             
+            # Логируем взаимодействие
+            agent_logger.log_interaction(
+                user_id=user_id,
+                username=username,
+                query=message.text,
+                response=response,
+                tools_used=tools_used,
+                tokens=tokens_info
+            )
+            
             # Notify admins
             await notify_admins(message.bot, message, response)
         
         except Exception as e:
+            error_text = str(e)
+            log.error(f"❌ Ошибка обработки сообщения: {error_text}")
+            
+            # Логируем ошибку
+            agent_logger.log_interaction(
+                user_id=user_id,
+                username=message.from_user.username or message.from_user.full_name,
+                query=message.text,
+                response="",
+                error=error_text
+            )
+            
             if progress_msg:
                 try:
                     await progress_msg.delete()

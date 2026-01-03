@@ -26,11 +26,19 @@ SYSTEM_PROMPT = load_prompt("system_prompt.txt")
 USER_INITIAL_PROMPT_TEMPLATE = load_prompt("user_initial_prompt.txt")
 
 
+class SessionData:
+    """Session data with metadata"""
+    def __init__(self):
+        self.messages = []
+        self.last_tokens = None
+        self.tools_used = []
+
+
 class AgentRunner:
     """AI Agent runner with streaming support"""
     
     def __init__(self):
-        self.sessions: dict[tuple[int, int], list] = {}  # (user_id, thread_id) -> messages
+        self.sessions: dict[str, SessionData] = {}  # "user_id:thread_id" -> SessionData
         self.tools = create_mcp_tools(config.mcp_url)
     
     async def run(
@@ -45,14 +53,28 @@ class AgentRunner:
         """Run agent with user message"""
         log.info(f"👤 {username} ({user_id}, топик: {thread_id}): {user_message}")
         
-        session_key = (user_id, thread_id)
+        session_key = f"{user_id}:{thread_id}"
         if session_key not in self.sessions:
-            self.sessions[session_key] = []
+            self.sessions[session_key] = SessionData()
         
-        self.sessions[session_key].append({"role": "user", "content": user_message})
+        session = self.sessions[session_key]
         
-        if len(self.sessions[session_key]) > config.max_history_messages:
-            self.sessions[session_key] = self.sessions[session_key][-config.max_history_messages:]
+        # Reset tools tracking for this run
+        session.tools_used = []
+        
+        # Format user message with template if it's the first message
+        if len(session.messages) == 0:
+            current_date = datetime.now().strftime("%d.%m.%Y")
+            formatted_message = USER_INITIAL_PROMPT_TEMPLATE.format(
+                current_date=current_date,
+                task=user_message
+            )
+            session.messages.append({"role": "user", "content": formatted_message})
+        else:
+            session.messages.append({"role": "user", "content": user_message})
+        
+        if len(session.messages) > config.max_history_messages:
+            session.messages = session.messages[-config.max_history_messages:]
         
         settings = ModelSettings(include_usage=True)
         
@@ -64,7 +86,7 @@ class AgentRunner:
             model_settings=settings,
         )
         
-        result = Runner.run_streamed(agent, self.sessions[session_key])
+        result = Runner.run_streamed(agent, session.messages)
         
         # Track tool calls
         async for event in result.stream_events():
@@ -72,6 +94,7 @@ class AgentRunner:
                 item = event.item
                 if hasattr(item, 'raw_item') and hasattr(item.raw_item, 'name'):
                     tool_name = item.raw_item.name
+                    session.tools_used.append(tool_name)
                     if "search" in tool_name:
                         await send_progress("🔍 Ищу товары...")
                     elif "cart" in tool_name:
@@ -82,14 +105,21 @@ class AgentRunner:
         # Log output
         log.info(f"🔍 Raw output (первые 500 симв.): {repr(final[:500]) if final else 'empty'}")
         
-        # Log token usage
+        # Log token usage and save to session
         try:
             usage = result.context_wrapper.usage
+            session.last_tokens = {
+                "input": usage.input_tokens,
+                "output": usage.output_tokens,
+                "total": usage.total_tokens
+            }
             cache_info = ""
             if hasattr(usage, 'cache_creation_input_tokens') and usage.cache_creation_input_tokens:
                 cache_info += f", cache_write={usage.cache_creation_input_tokens}"
+                session.last_tokens["cache_write"] = usage.cache_creation_input_tokens
             if hasattr(usage, 'cache_read_input_tokens') and usage.cache_read_input_tokens:
                 cache_info += f", cache_read={usage.cache_read_input_tokens}"
+                session.last_tokens["cache_read"] = usage.cache_read_input_tokens
             log.info(f"📊 Токены: input={usage.input_tokens}, output={usage.output_tokens}, total={usage.total_tokens}{cache_info}")
         except:
             pass
@@ -106,7 +136,7 @@ class AgentRunner:
         if stream_callback and final:
             try:
                 messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-                messages.extend(self.sessions[session_key])
+                messages.extend(session.messages)
                 
                 accumulated = ""
                 last_update_len = 0
@@ -157,12 +187,12 @@ class AgentRunner:
                 if final:
                     await stream_callback(final)
         
-        self.sessions[session_key].append({"role": "assistant", "content": final})
+        session.messages.append({"role": "assistant", "content": final})
         log.info(f"✅ Ответ готов ({len(final)} символов)")
         return final
     
     def reset_session(self, user_id: int, thread_id: int = 0):
         """Reset user session"""
-        session_key = (user_id, thread_id)
+        session_key = f"{user_id}:{thread_id}"
         self.sessions.pop(session_key, None)
 

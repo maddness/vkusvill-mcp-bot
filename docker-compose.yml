@@ -9,6 +9,8 @@ services:
       - ./config.yaml:/app/config.yaml
       - ./prompts:/app/prompts
       - ./assets:/app/assets
+      - ./logs:/app/logs
+      - ./db:/app/db
     logging:
       driver: "json-file"
       options:

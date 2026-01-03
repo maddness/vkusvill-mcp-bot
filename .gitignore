@@ -39,6 +39,10 @@ config.yaml
 # Logs
 *.log
 bot.log
+logs/
+
+# Database
+db/
 
 # Docker
 .dockerignore
