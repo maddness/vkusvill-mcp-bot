@@ -12,10 +12,10 @@ def create_mcp_tools(mcp_url: str):
     mcp = MCPClient(mcp_url)
     
     @function_tool
-    async def search_products(query: str) -> str:
-        """Поиск товаров ВкусВилл по названию. Возвращает список товаров с xml_id, названием, ценой и рейтингом."""
-        log.info(f"🔍 Поиск: {query}")
-        result = await mcp.call("vkusvill_products_search", {"q": query})
+    async def search_products(query: str, page: int = 1) -> str:
+        """Поиск товаров ВкусВилл по названию. Возвращает список товаров с id, xml_id, названием, ценой и рейтингом. page - номер страницы (10 товаров на страницу)."""
+        log.info(f"🔍 Поиск: {query} (страница {page})")
+        result = await mcp.call("vkusvill_products_search", {"q": query, "page": page, "sort": "popularity"})
         
         content = result.get("content", [])
         if not content:
@@ -31,15 +31,17 @@ def create_mcp_tools(mcp_url: str):
             if not products:
                 products = data if isinstance(data, list) else []
             
-            # Filter only necessary fields
+            # Return more fields including id for vkusvill_product_details
             filtered = []
-            for p in products[:10]:  # Take up to 10 products for better search coverage
+            for p in products:
                 rating = p.get("rating", {})
                 filtered.append({
-                    "xml_id": p.get("xml_id"),
-                    "name": p.get("name", "")[:50],  # Truncate name
+                    "id": p.get("id"),  # Для vkusvill_product_details
+                    "xml_id": p.get("xml_id"),  # Для корзины
+                    "name": p.get("name", ""),
                     "price": p.get("price"),
-                    "rating": rating.get("average") if rating else None
+                    "rating": rating.get("average") if rating else None,
+                    "url": p.get("url", "")  # Возможно есть прямая ссылка
                 })
             log.info(f"✅ Найдено {len(filtered)} товаров")
             return json.dumps(filtered, ensure_ascii=False) if filtered else "Товары не найдены"
@@ -65,26 +67,21 @@ def create_mcp_tools(mcp_url: str):
         return "Ошибка создания корзины"
     
     @function_tool
-    async def get_product_link(xml_id: int) -> str:
-        """Получить прямую ссылку на товар ВкусВилл по xml_id. Возвращает URL на страницу товара."""
-        log.info(f"🔗 Получаю ссылку на товар: {xml_id}")
-        result = await mcp.call("vkusvill_product_link", {"xml_id": xml_id})
+    async def get_product_details(product_id: int) -> str:
+        """Получить детальную информацию о товаре ВкусВилл по id (не xml_id!). Возвращает состав, КБЖУ, фото, рейтинг, цену и URL товара."""
+        log.info(f"📋 Получаю детали товара: {product_id}")
+        result = await mcp.call("vkusvill_product_details", {"id": product_id})
         
         content = result.get("content", [])
         if content:
-            link = content[0].get("text", "")
-            if link:
-                log.info(f"✅ Ссылка получена: {link}")
-                return link
+            details = content[0].get("text", "")
+            if details:
+                log.info(f"✅ Детали получены")
+                return details
         
-        log.warning(f"⚠️ Не удалось получить ссылку, создаю через корзину")
-        # Fallback: создаём корзину с одним товаром
-        cart_result = await mcp.call("vkusvill_cart_link_create", {"products": [{"xml_id": xml_id, "q": 1}]})
-        cart_content = cart_result.get("content", [])
-        if cart_content:
-            return f"Ссылка через корзину: {cart_content[0].get('text', '')}"
-        return f"Ошибка получения ссылки для товара {xml_id}"
+        log.warning(f"⚠️ Не удалось получить детали товара {product_id}")
+        return f"Ошибка получения деталей для товара {product_id}"
     
-    return [search_products, create_cart, get_product_link]
+    return [search_products, create_cart, get_product_details]
 
 
