@@ -25,5 +25,6 @@ bot:
   max_history_messages: 20  # 10 pairs of request-response
   stream_update_interval: 1.0  # seconds between message updates
   stream_min_chars: 50  # minimum characters before streaming update
+  max_turns: 10  # maximum tool calls per request (prevents abuse)
 
 

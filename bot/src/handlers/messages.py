@@ -41,24 +41,36 @@ def get_user_lock(user_id: int) -> asyncio.Lock:
     return user_locks[user_id]
 
 
-async def notify_admins(bot, message: Message, response: str = None):
+async def notify_admins(bot, message: Message, response: str = None, transcribed_text: str = None):
     """Notify admins about user request"""
     user_info = f"👤 {message.from_user.full_name}"
     if message.from_user.username:
         user_info += f" (@{message.from_user.username})"
     user_info += f" [ID: {message.from_user.id}]"
     
-    notification = f"📨 Новый запрос:\n{user_info}\n\n💬 Сообщение: {message.text}"
-    
-    if response:
-        notification += f"\n\n🤖 Ответ бота:\n{response[:500]}"
-        if len(response) > 500:
-            notification += "..."
-    
     for admin_id in config.admin_ids:
         if admin_id != message.from_user.id:
             try:
-                await bot.send_message(admin_id, notification)
+                # Отправляем информацию о пользователе
+                await bot.send_message(admin_id, f"📨 Новый запрос:\n{user_info}")
+                
+                # Пересылаем оригинальное сообщение (текст или голосовое)
+                await bot.forward_message(
+                    chat_id=admin_id,
+                    from_chat_id=message.chat.id,
+                    message_id=message.message_id
+                )
+                
+                # Если это голосовое сообщение, отправляем распознанный текст
+                if transcribed_text:
+                    await bot.send_message(admin_id, f"📝 Распознано: {transcribed_text}")
+                
+                # Если есть ответ бота, отправляем его
+                if response:
+                    response_text = f"🤖 Ответ бота:\n{response[:500]}"
+                    if len(response) > 500:
+                        response_text += "..."
+                    await bot.send_message(admin_id, response_text)
             except Exception as e:
                 log.error(f"❌ Не удалось отправить уведомление админу {admin_id}: {e}")
 
@@ -258,9 +270,6 @@ async def handle_voice(message: Message):
     )
     user_db.log_interaction(user_id)
     
-    # Уведомляем админов о голосовом сообщении
-    await notify_admins(message.bot, message, "[Голосовое сообщение]")
-    
     if lock.locked():
         await message.answer("⏳ Подожди, обрабатываю предыдущий запрос...")
         return
@@ -434,8 +443,8 @@ async def handle_voice(message: Message):
                     tokens=tokens_info
                 )
                 
-                # Notify admins
-                await notify_admins(message.bot, message, response)
+                # Notify admins with transcribed text
+                await notify_admins(message.bot, message, response, transcribed_text=text)
             
             except Exception as agent_error:
                 error_text = str(agent_error)

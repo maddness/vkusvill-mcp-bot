@@ -86,7 +86,11 @@ class AgentRunner:
             model_settings=settings,
         )
         
-        result = Runner.run_streamed(agent, session.messages)
+        # Ограничиваем количество шагов (tool calls) за один запрос
+        # Это защищает от злоупотреблений и зацикливания
+        max_turns = config.max_turns
+        log.info(f"🔄 Максимум шагов: {max_turns}")
+        result = Runner.run_streamed(agent, session.messages, max_turns=max_turns)
         
         # Track tool calls
         async for event in result.stream_events():
