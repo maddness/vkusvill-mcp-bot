@@ -258,6 +258,9 @@ async def handle_voice(message: Message):
     )
     user_db.log_interaction(user_id)
     
+    # Уведомляем админов о голосовом сообщении
+    await notify_admins(message.bot, message, "[Голосовое сообщение]")
+    
     if lock.locked():
         await message.answer("⏳ Подожди, обрабатываю предыдущий запрос...")
         return
