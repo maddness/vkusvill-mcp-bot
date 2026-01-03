@@ -81,12 +81,13 @@ async def notify_admins(bot, message: Message, response: str = None, transcribed
 async def handle_message(message: Message):
     """Handle text messages"""
     # В админ-группе реагируем только на сообщения, начинающиеся с "вкусик"
+    user_message = message.text
     if message.chat.id in config.admin_ids:
-        if not message.text.lower().startswith("вкусик"):
+        if not user_message.lower().startswith("вкусик"):
             return
         # Убираем "вкусик" из текста
-        message.text = message.text[6:].strip()
-        if not message.text:
+        user_message = user_message[6:].strip()
+        if not user_message:
             await message.answer("Чем могу помочь?")
             return
     
@@ -187,7 +188,7 @@ async def handle_message(message: Message):
         try:
             username = message.from_user.username or message.from_user.full_name
             thread_id = message.message_thread_id or 0
-            response = await agent_runner.run(user_id, username, message.text, send_progress, stream_text, thread_id)
+            response = await agent_runner.run(user_id, username, user_message, send_progress, stream_text, thread_id)
             
             # Получаем информацию о токенах и использованных инструментах
             session_key = f"{user_id}:{thread_id}"
@@ -227,7 +228,7 @@ async def handle_message(message: Message):
             agent_logger.log_interaction(
                 user_id=user_id,
                 username=username,
-                query=message.text,
+                query=user_message,
                 response=response,
                 tools_used=tools_used,
                 tokens=tokens_info
@@ -244,7 +245,7 @@ async def handle_message(message: Message):
             agent_logger.log_interaction(
                 user_id=user_id,
                 username=message.from_user.username or message.from_user.full_name,
-                query=message.text,
+                query=user_message,
                 response="",
                 error=error_text
             )
