@@ -80,6 +80,16 @@ async def notify_admins(bot, message: Message, response: str = None, transcribed
 @router.message(F.text)
 async def handle_message(message: Message):
     """Handle text messages"""
+    # В админ-группе реагируем только на сообщения, начинающиеся с "вкусик"
+    if message.chat.id in config.admin_ids:
+        if not message.text.lower().startswith("вкусик"):
+            return
+        # Убираем "вкусик" из текста
+        message.text = message.text[6:].strip()
+        if not message.text:
+            await message.answer("Чем могу помочь?")
+            return
+    
     user_id = message.from_user.id
     lock = get_user_lock(user_id)
     
@@ -256,6 +266,10 @@ async def handle_message(message: Message):
 @router.message(F.voice)
 async def handle_voice(message: Message):
     """Handle voice messages"""
+    # В админ-группе игнорируем голосовые сообщения
+    if message.chat.id in config.admin_ids:
+        return
+    
     if not transcriber:
         await message.answer("⚠️ Транскрибация голосовых сообщений не настроена")
         return
