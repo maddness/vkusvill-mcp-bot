@@ -1,10 +1,11 @@
 """Message handlers"""
+import re
 import time
 import logging
 import asyncio
 import base64
 from aiogram import Router, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, URLInputFile
 from aiogram.enums import ParseMode
 
 from ..agent.runner import AgentRunner
@@ -40,6 +41,24 @@ def get_user_lock(user_id: int) -> asyncio.Lock:
     if user_id not in user_locks:
         user_locks[user_id] = asyncio.Lock()
     return user_locks[user_id]
+
+
+def extract_vkusvill_image(text: str) -> tuple[str | None, str]:
+    """Extract VkusVill image URL from text and return (image_url, cleaned_text)"""
+    # Pattern for VkusVill image URLs
+    pattern = r'https://img\.vkusvill\.ru/[^\s\)\]]+\.webp[^\s\)\]]*'
+    match = re.search(pattern, text)
+
+    if match:
+        image_url = match.group(0)
+        # Remove markdown image link if present: [text](url) or (url)
+        cleaned = re.sub(r'\[📷[^\]]*\]\([^\)]+\)\s*', '', text)
+        cleaned = re.sub(r'\(https://img\.vkusvill\.ru/[^\)]+\)\s*', '', cleaned)
+        # Also remove standalone URL
+        cleaned = re.sub(pattern + r'\s*', '', cleaned)
+        return image_url, cleaned.strip()
+
+    return None, text
 
 
 async def notify_admins(bot, message: Message, response: str = None, transcribed_text: str = None):
@@ -190,7 +209,7 @@ async def handle_message(message: Message):
             username = message.from_user.username or message.from_user.full_name
             thread_id = message.message_thread_id or 0
             response = await agent_runner.run(user_id, username, user_message, send_progress, stream_text, thread_id)
-            
+
             # Получаем информацию о токенах и использованных инструментах
             session_key = f"{user_id}:{thread_id}"
             if session_key in agent_runner.sessions:
@@ -199,22 +218,46 @@ async def handle_message(message: Message):
                     tokens_info = session.last_tokens
                 if hasattr(session, 'tools_used'):
                     tools_used = session.tools_used
-            
+
             if progress_msg:
                 try:
                     await progress_msg.delete()
                 except:
                     pass
                 progress_msg = None
-            
+
             keyboard = None
             if "vkusvill.ru" in response:
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🛒 Собрать новую корзину", callback_data="new_basket")]
                 ])
-            
+
+            # Check for VkusVill product image
+            image_url, cleaned_response = extract_vkusvill_image(response)
+
             # Final message
-            if stream_msg:
+            if image_url:
+                # Send photo with caption
+                if stream_msg:
+                    try:
+                        await stream_msg.delete()
+                    except:
+                        pass
+                try:
+                    photo = URLInputFile(image_url)
+                    await message.answer_photo(
+                        photo=photo,
+                        caption=cleaned_response[:1024],  # Telegram caption limit
+                        reply_markup=keyboard,
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                except Exception as photo_err:
+                    log.warning(f"Failed to send photo, falling back to text: {photo_err}")
+                    try:
+                        await message.answer(cleaned_response, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+                    except:
+                        await message.answer(cleaned_response, reply_markup=keyboard)
+            elif stream_msg:
                 try:
                     await stream_msg.edit_text(response, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
                 except:
@@ -224,7 +267,7 @@ async def handle_message(message: Message):
                     await message.answer(response, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
                 except:
                     await message.answer(response, reply_markup=keyboard)
-            
+
             # Логируем взаимодействие
             agent_logger.log_interaction(
                 user_id=user_id,
