@@ -2,6 +2,7 @@
 import time
 import logging
 import asyncio
+import base64
 from aiogram import Router, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.enums import ParseMode
@@ -491,6 +492,169 @@ async def handle_voice(message: Message):
         
         except Exception as e:
             log.error(f"❌ Ошибка обработки голосового сообщения: {e}")
+            try:
+                await status_msg.edit_text(f"❌ Произошла ошибка: {e}")
+            except:
+                await message.answer(f"❌ Произошла ошибка: {e}")
+
+
+@router.message(F.photo)
+async def handle_photo(message: Message):
+    """Handle photo messages"""
+    # В админ-группе игнорируем фото без триггера
+    caption = message.caption or ""
+    if message.chat.id in config.admin_ids:
+        if not caption.lower().startswith("вкусик"):
+            return
+        # Убираем "вкусик" из подписи
+        caption = caption[6:].strip()
+    
+    user_id = message.from_user.id
+    lock = get_user_lock(user_id)
+    
+    # Регистрируем пользователя в БД
+    user_db.add_user(
+        user_id=user_id,
+        username=message.from_user.username,
+        first_name=message.from_user.first_name,
+        last_name=message.from_user.last_name
+    )
+    user_db.log_interaction(user_id)
+    
+    if lock.locked():
+        await message.answer("⏳ Подожди, обрабатываю предыдущий запрос...")
+        return
+    
+    async with lock:
+        status_msg = await message.answer("🖼️ Анализирую изображение...")
+        
+        try:
+            # Скачиваем фото (берем самое большое разрешение)
+            photo = message.photo[-1]
+            file = await message.bot.get_file(photo.file_id)
+            photo_bytes = await message.bot.download_file(file.file_path)
+            
+            # Кодируем в base64
+            photo_b64 = base64.b64encode(photo_bytes.read()).decode()
+            
+            # Формируем запрос с изображением
+            if not caption:
+                user_prompt = "Что изображено на этой картинке? Если это продукты или блюдо, помоги собрать корзину с похожими товарами из ВкусВилл."
+            else:
+                user_prompt = caption
+            
+            await status_msg.delete()
+            
+            # Создаем progress и stream callbacks
+            progress_msg = None
+            stream_msg = None
+            is_streaming = False
+            tools_used = []
+            tokens_info = None
+            
+            async def send_progress(text: str):
+                nonlocal progress_msg
+                if progress_msg:
+                    try:
+                        await progress_msg.edit_text(text)
+                    except:
+                        pass
+                else:
+                    progress_msg = await message.answer(text)
+            
+            async def stream_text(text: str):
+                """Stream text updates"""
+                nonlocal stream_msg, is_streaming, progress_msg
+                
+                if not is_streaming and progress_msg:
+                    try:
+                        await progress_msg.delete()
+                        progress_msg = None
+                    except:
+                        pass
+                
+                display_text = text
+                if "<think>" in display_text:
+                    think_end = display_text.find("</think>")
+                    if think_end > 0:
+                        display_text = display_text[think_end+8:].strip()
+                
+                if not display_text:
+                    return
+                
+                try:
+                    if not stream_msg:
+                        stream_msg = await message.answer(display_text + " ▌", parse_mode=ParseMode.MARKDOWN)
+                        is_streaming = True
+                    else:
+                        current_time = time.time()
+                        if not hasattr(stream_text, 'last_update') or current_time - stream_text.last_update >= 1.0:
+                            await stream_msg.edit_text(display_text + " ▌", parse_mode=ParseMode.MARKDOWN)
+                            stream_text.last_update = current_time
+                except Exception as e:
+                    if "Flood control" not in str(e):
+                        log.error(f"Ошибка обновления сообщения: {e}")
+            
+            await send_progress("💭 Думаю...")
+            
+            username = message.from_user.username or message.from_user.full_name
+            thread_id = message.message_thread_id or 0
+            
+            # Запускаем агента с изображением
+            response = await agent_runner.run_with_image(
+                user_id, username, user_prompt, photo_b64, 
+                send_progress, stream_text, thread_id
+            )
+            
+            # Получаем информацию о токенах
+            session_key = f"{user_id}:{thread_id}"
+            if session_key in agent_runner.sessions:
+                session = agent_runner.sessions[session_key]
+                if hasattr(session, 'last_tokens'):
+                    tokens_info = session.last_tokens
+                if hasattr(session, 'tools_used'):
+                    tools_used = session.tools_used
+            
+            if progress_msg:
+                try:
+                    await progress_msg.delete()
+                except:
+                    pass
+                progress_msg = None
+            
+            keyboard = None
+            if "vkusvill.ru" in response:
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🛒 Собрать новую корзину", callback_data="new_basket")]
+                ])
+            
+            # Final message
+            if stream_msg:
+                try:
+                    await stream_msg.edit_text(response, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+                except:
+                    await stream_msg.edit_text(response, reply_markup=keyboard)
+            else:
+                try:
+                    await message.answer(response, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+                except:
+                    await message.answer(response, reply_markup=keyboard)
+            
+            # Логируем взаимодействие
+            agent_logger.log_interaction(
+                user_id=user_id,
+                username=username,
+                query=f"[PHOTO] {user_prompt}",
+                response=response,
+                tools_used=tools_used,
+                tokens=tokens_info
+            )
+            
+            # Notify admins
+            await notify_admins(message.bot, message, response)
+        
+        except Exception as e:
+            log.error(f"❌ Ошибка обработки фото: {e}")
             try:
                 await status_msg.edit_text(f"❌ Произошла ошибка: {e}")
             except:
