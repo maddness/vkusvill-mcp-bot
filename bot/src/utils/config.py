@@ -74,6 +74,10 @@ class Config:
     @property
     def stream_min_chars(self) -> int:
         return self._config['bot']['stream_min_chars']
+    
+    @property
+    def max_turns(self) -> int:
+        return self._config['bot'].get('max_turns', 10)
 
 
 # Global config instance
