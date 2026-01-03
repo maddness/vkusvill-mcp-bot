@@ -1,0 +1,17 @@
+services:
+  vkusvill-bot:
+    build: .
+    container_name: vkusvill-bot
+    restart: unless-stopped
+    volumes:
+      - ./app.py:/app/app.py
+      - ./bot:/app/bot
+      - ./config.yaml:/app/config.yaml
+      - ./prompts:/app/prompts
+      - ./assets:/app/assets
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+

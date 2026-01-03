@@ -1,10 +1,12 @@
-# VkusVill Telegram Bot
+# VkusVill AI Shopping Assistant
 
-Telegram-бот для сбора продуктовых корзин ВкусВилл с использованием AI.
+> 🤖 Умный Telegram-бот для автоматического сбора продуктовых корзин ВкусВилл
 
 <p align="center">
   <img src="assets/pic.jpg" alt="Demo" width="400">
 </p>
+
+📖 **[Полная документация в AGENT.md](AGENT.md)**
 
 ## Что делает бот
 
@@ -25,45 +27,51 @@ Telegram-бот для сбора продуктовых корзин ВкусВ
 ### 1. Клонировать репозиторий
 
 ```bash
-git clone https://github.com/maddness/vkusvill-mcp-bot.git
+git clone https://github.com/vakovalskii/vkusvill-mcp-bot.git
 cd vkusvill-mcp-bot
 ```
 
-### 2. Создать виртуальное окружение
+### 2. Настроить конфигурацию
+
+```bash
+cp config.example.yaml config.yaml
+```
+
+Заполнить `config.yaml`:
+
+```yaml
+telegram:
+  bot_token: "YOUR_BOT_TOKEN"  # Токен от @BotFather
+  admin_ids:
+    - 123456789  # Ваш Telegram ID
+
+llm:
+  model: "litellm/openai/claude-haiku-4-5"
+  api_key: "YOUR_API_KEY"
+  api_base: "https://openai-hub.neuraldeep.tech/v1"
+
+mcp:
+  url: "https://mcp001.vkusvill.ru/mcp"
+
+bot:
+  max_history_messages: 20
+  stream_update_interval: 1.0
+  stream_min_chars: 50
+```
+
+### 3. Запуск через Docker (рекомендуется)
+
+```bash
+docker compose up -d
+```
+
+### 4. Или запуск локально
 
 ```bash
 python3 -m venv venv
-source venv/bin/activate  # Linux/macOS
-# или
-venv\Scripts\activate  # Windows
-```
-
-### 3. Установить зависимости
-
-```bash
+source venv/bin/activate
 pip install -r requirements.txt
-```
-
-### 4. Настроить переменные окружения
-
-```bash
-cp .env.example .env
-```
-
-Заполнить `.env`:
-
-| Переменная | Описание |
-|------------|----------|
-| `TELEGRAM_BOT_TOKEN` | Токен бота от [@BotFather](https://t.me/BotFather) |
-| `ANTHROPIC_API_KEY` | API ключ для Claude |
-| `MODEL` | Название модели (по умолчанию `litellm/openai/claude-haiku-4-5`) |
-| `API_BASE` | URL API для LLM |
-| `MCP_URL` | URL MCP сервера ВкусВилл |
-
-### 5. Запустить бота
-
-```bash
-source venv/bin/activate && python main.py
+python app.py
 ```
 
 ## Деплой на сервер
