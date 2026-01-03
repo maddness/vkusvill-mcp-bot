@@ -1,19 +1,24 @@
 """MCP Tools for VkusVill"""
 import json
 import logging
+from contextvars import ContextVar
 from agents import function_tool
 from .client import MCPClient
 
 log = logging.getLogger(__name__)
 
-# Shared storage for cart products (will be managed by AgentRunner)
-_cart_storage: dict[str, int] = {}
+# Context-local storage for cart products (thread/async-safe)
+_cart_storage_var: ContextVar[dict[str, int]] = ContextVar('cart_storage', default={})
 
 
 def set_cart_storage(storage: dict[str, int]):
-    """Set the cart storage dict (called by AgentRunner before each run)"""
-    global _cart_storage
-    _cart_storage = storage
+    """Set the cart storage dict for current async context"""
+    _cart_storage_var.set(storage)
+
+
+def get_cart_storage() -> dict[str, int]:
+    """Get the cart storage dict for current async context"""
+    return _cart_storage_var.get()
 
 
 def create_mcp_tools(mcp_url: str):
@@ -51,8 +56,9 @@ def create_mcp_tools(mcp_url: str):
                 if product_id and product_name and page == 1:
                     # Normalize name for lookup (lowercase, first significant words)
                     name_key = product_name.lower().split(",")[0].strip()
-                    if name_key not in _cart_storage:
-                        _cart_storage[name_key] = product_id
+                    cart_storage = get_cart_storage()
+                    if name_key not in cart_storage:
+                        cart_storage[name_key] = product_id
                         log.debug(f"📦 Сохранён товар: {name_key} -> {product_id}")
 
                 filtered.append({
