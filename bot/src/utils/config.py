@@ -25,7 +25,7 @@ class Config:
     
     @property
     def admin_ids(self) -> List[int]:
-        return self._config['telegram']['admin_ids']
+        return self._config['telegram'].get('admin_ids') or []
     
     @property
     def llm_model(self) -> str:

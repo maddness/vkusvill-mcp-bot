@@ -6,39 +6,59 @@ from .client import MCPClient
 
 log = logging.getLogger(__name__)
 
+# Shared storage for cart products (will be managed by AgentRunner)
+_cart_storage: dict[str, int] = {}
+
+
+def set_cart_storage(storage: dict[str, int]):
+    """Set the cart storage dict (called by AgentRunner before each run)"""
+    global _cart_storage
+    _cart_storage = storage
+
 
 def create_mcp_tools(mcp_url: str):
     """Create MCP tools for agent"""
     mcp = MCPClient(mcp_url)
-    
+
     @function_tool
     async def search_products(query: str, page: int = 1) -> str:
         """Поиск товаров ВкусВилл по названию. Возвращает список товаров с id, xml_id, названием, ценой и рейтингом. page - номер страницы (10 товаров на страницу)."""
         log.info(f"🔍 Поиск: {query} (страница {page})")
         result = await mcp.call("vkusvill_products_search", {"q": query, "page": page, "sort": "popularity"})
-        
+
         content = result.get("content", [])
         if not content:
             return "Товары не найдены"
-        
+
         text = content[0].get("text", "")
         if not text:
             return "Товары не найдены"
-        
+
         try:
             data = json.loads(text)
             products = data.get("data", {}).get("items", [])
             if not products:
                 products = data if isinstance(data, list) else []
-            
+
             # Return more fields including id for vkusvill_product_details
             filtered = []
             for p in products:
                 rating = p.get("rating", {})
+                product_id = p.get("id")
+                product_name = p.get("name", "")
+
+                # Store first product in cart storage for quick lookup
+                if product_id and product_name and page == 1:
+                    # Normalize name for lookup (lowercase, first significant words)
+                    name_key = product_name.lower().split(",")[0].strip()
+                    if name_key not in _cart_storage:
+                        _cart_storage[name_key] = product_id
+                        log.debug(f"📦 Сохранён товар: {name_key} -> {product_id}")
+
                 filtered.append({
-                    "id": p.get("id"),  # Для vkusvill_product_details
+                    "id": product_id,  # Для vkusvill_product_details
                     "xml_id": p.get("xml_id"),  # Для корзины
-                    "name": p.get("name", ""),
+                    "name": product_name,
                     "price": p.get("price"),
                     "rating": rating.get("average") if rating else None,
                     "url": p.get("url", "")  # Возможно есть прямая ссылка
