@@ -49,7 +49,9 @@ async def notify_admins(bot, message: Message, response: str = None, transcribed
     user_info += f" [ID: {message.from_user.id}]"
     
     for admin_id in config.admin_ids:
-        if admin_id != message.from_user.id:
+        # Для групп (отрицательные ID) всегда отправляем
+        # Для личных чатов (положительные ID) не отправляем самому себе
+        if admin_id < 0 or admin_id != message.from_user.id:
             try:
                 # Отправляем информацию о пользователе
                 await bot.send_message(admin_id, f"📨 Новый запрос:\n{user_info}")
@@ -72,7 +74,7 @@ async def notify_admins(bot, message: Message, response: str = None, transcribed
                         response_text += "..."
                     await bot.send_message(admin_id, response_text)
             except Exception as e:
-                log.error(f"❌ Не удалось отправить уведомление админу {admin_id}: {e}")
+                log.error(f"❌ Не удалось отправить уведомление в чат {admin_id}: {e}")
 
 
 @router.message(F.text)
