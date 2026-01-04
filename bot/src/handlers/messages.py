@@ -192,12 +192,12 @@ async def handle_message(message: Message):
                 log.debug(f"sendMessageDraft не поддерживается, используем editMessageText: {e}")
                 try:
                     if not stream_msg:
-                        stream_msg = await message.answer(display_text + " ▌", parse_mode=ParseMode.MARKDOWN)
+                        stream_msg = await message.answer(display_text + " ▌")
                         is_streaming = True
                     else:
                         current_time = time.time()
                         if not hasattr(stream_text, 'last_update') or current_time - stream_text.last_update >= 1.0:
-                            await stream_msg.edit_text(display_text + " ▌", parse_mode=ParseMode.MARKDOWN)
+                            await stream_msg.edit_text(display_text + " ▌")
                             stream_text.last_update = current_time
                 except Exception as edit_error:
                     if "Flood control" not in str(edit_error):
@@ -234,6 +234,11 @@ async def handle_message(message: Message):
 
             # Check for VkusVill product image
             image_url, cleaned_response = extract_vkusvill_image(response)
+
+            # Log cart state before sending response
+            if session_key in agent_runner.sessions:
+                cart = agent_runner.sessions[session_key].cart_products
+                log.info(f"🛒 Корзина пользователя {user_id}: {len(cart)} товаров: {dict(cart)}")
 
             # Final message
             if image_url:
@@ -442,12 +447,12 @@ async def handle_voice(message: Message):
                     log.debug(f"sendMessageDraft не поддерживается, используем editMessageText: {e}")
                     try:
                         if not stream_msg:
-                            stream_msg = await message.answer(display_text + " ▌", parse_mode=ParseMode.MARKDOWN)
+                            stream_msg = await message.answer(display_text + " ▌")
                             is_streaming = True
                         else:
                             current_time = time.time()
                             if not hasattr(stream_text, 'last_update') or current_time - stream_text.last_update >= 1.0:
-                                await stream_msg.edit_text(display_text + " ▌", parse_mode=ParseMode.MARKDOWN)
+                                await stream_msg.edit_text(display_text + " ▌")
                                 stream_text.last_update = current_time
                     except Exception as edit_error:
                         if "Flood control" not in str(edit_error):
@@ -481,7 +486,12 @@ async def handle_voice(message: Message):
                     keyboard = InlineKeyboardMarkup(inline_keyboard=[
                         [InlineKeyboardButton(text="🛒 Собрать новую корзину", callback_data="new_basket")]
                     ])
-                
+
+                # Log cart state before sending response
+                if session_key in agent_runner.sessions:
+                    cart = agent_runner.sessions[session_key].cart_products
+                    log.info(f"🛒 Корзина пользователя {user_id}: {len(cart)} товаров: {dict(cart)}")
+
                 # Final message
                 if stream_msg:
                     try:
@@ -493,7 +503,7 @@ async def handle_voice(message: Message):
                         await message.answer(response, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
                     except:
                         await message.answer(response, reply_markup=keyboard)
-                
+
                 # Логируем взаимодействие
                 agent_logger.log_interaction(
                     user_id=user_id,
@@ -627,12 +637,12 @@ async def handle_photo(message: Message):
                 
                 try:
                     if not stream_msg:
-                        stream_msg = await message.answer(display_text + " ▌", parse_mode=ParseMode.MARKDOWN)
+                        stream_msg = await message.answer(display_text + " ▌")
                         is_streaming = True
                     else:
                         current_time = time.time()
                         if not hasattr(stream_text, 'last_update') or current_time - stream_text.last_update >= 1.0:
-                            await stream_msg.edit_text(display_text + " ▌", parse_mode=ParseMode.MARKDOWN)
+                            await stream_msg.edit_text(display_text + " ▌")
                             stream_text.last_update = current_time
                 except Exception as e:
                     if "Flood control" not in str(e):
@@ -670,7 +680,12 @@ async def handle_photo(message: Message):
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🛒 Собрать новую корзину", callback_data="new_basket")]
                 ])
-            
+
+            # Log cart state before sending response
+            if session_key in agent_runner.sessions:
+                cart = agent_runner.sessions[session_key].cart_products
+                log.info(f"🛒 Корзина пользователя {user_id}: {len(cart)} товаров: {dict(cart)}")
+
             # Final message
             if stream_msg:
                 try:
@@ -682,7 +697,7 @@ async def handle_photo(message: Message):
                     await message.answer(response, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
                 except:
                     await message.answer(response, reply_markup=keyboard)
-            
+
             # Логируем взаимодействие
             agent_logger.log_interaction(
                 user_id=user_id,

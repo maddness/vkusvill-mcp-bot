@@ -37,7 +37,6 @@ def create_mcp_tools(mcp_url: str):
     @function_tool
     async def search_products(query: str, page: int = 1) -> str:
         """Поиск товаров ВкусВилл по названию. Возвращает список товаров с id, xml_id, названием, ценой и рейтингом. page - номер страницы (10 товаров на страницу)."""
-        log.info(f"🔍 Поиск: {query} (страница {page})")
         result = await mcp.call("vkusvill_products_search", {"q": query, "page": page, "sort": "popularity"})
 
         content = result.get("content", [])
@@ -73,7 +72,9 @@ def create_mcp_tools(mcp_url: str):
                     "xml_id": p.get("xml_id"),  # Для корзины
                     "name": product_name,
                     "price": p.get("price"),
+                    "weight": p.get("weight") or p.get("unit_name") or p.get("amount"),
                     "rating": rating.get("average") if rating else None,
+                    "rating_count": rating.get("count") if rating else None,
                     "url": p.get("url", "")  # Возможно есть прямая ссылка
                 })
             log.info(f"✅ Найдено {len(filtered)} товаров")
@@ -113,7 +114,6 @@ def create_mcp_tools(mcp_url: str):
     @function_tool
     async def get_product_details(product_id: int) -> str:
         """Получает детальную информацию о товаре по его id: состав, КБЖУ, срок годности, условия хранения, изготовитель."""
-        log.info(f"📋 Детали товара: {product_id}")
         result = await mcp.call("vkusvill_product_details", {"id": product_id})
 
         content = result.get("content", [])
@@ -129,11 +129,14 @@ def create_mcp_tools(mcp_url: str):
             product = data.get("data", data)
 
             # Извлекаем основную информацию
+            rating_data = product.get("rating", {})
             info = {
                 "name": product.get("name", "").replace("&nbsp;", " "),
                 "price": product.get("price", {}).get("current"),
+                "weight": product.get("weight") or product.get("unit_name") or product.get("amount"),
                 "brand": product.get("brand"),
-                "rating": product.get("rating", {}).get("average"),
+                "rating": rating_data.get("average"),
+                "rating_count": rating_data.get("count"),
                 "url": product.get("url")  # Ссылка на страницу товара
             }
 

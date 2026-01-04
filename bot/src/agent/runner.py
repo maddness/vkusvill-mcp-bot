@@ -109,6 +109,8 @@ class AgentRunner:
                 item = event.item
                 if hasattr(item, 'raw_item') and hasattr(item.raw_item, 'name'):
                     tool_name = item.raw_item.name
+                    tool_args = getattr(item.raw_item, 'arguments', None) or getattr(item.raw_item, 'input', None) or ''
+                    log.info(f"🔧 Tool call: {tool_name}({tool_args})")
                     session.tools_used.append(tool_name)
                     if "search" in tool_name:
                         await send_progress("🔍 Ищу товары...")
@@ -285,6 +287,8 @@ class AgentRunner:
                 item = event.item
                 if hasattr(item, 'raw_item') and hasattr(item.raw_item, 'name'):
                     tool_name = item.raw_item.name
+                    tool_args = getattr(item.raw_item, 'arguments', None) or getattr(item.raw_item, 'input', None) or ''
+                    log.info(f"🔧 Tool call: {tool_name}({tool_args})")
                     session.tools_used.append(tool_name)
                     if "search" in tool_name:
                         await send_progress("🔍 Ищу товары...")
