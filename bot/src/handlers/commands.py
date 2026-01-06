@@ -5,12 +5,11 @@ from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery
 from aiogram.enums import ParseMode
 
-from ..agent.runner import AgentRunner
+from .messages import agent_runner
 
 log = logging.getLogger(__name__)
 
 router = Router()
-agent_runner = AgentRunner()
 
 
 @router.message(Command("start"))
