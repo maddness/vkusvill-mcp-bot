@@ -79,6 +79,22 @@ class Config:
     def max_turns(self) -> int:
         return self._config['bot'].get('max_turns', 10)
 
+    @property
+    def langfuse_secret_key(self) -> str:
+        return self._config.get('langfuse', {}).get('secret_key', '')
+
+    @property
+    def langfuse_public_key(self) -> str:
+        return self._config.get('langfuse', {}).get('public_key', '')
+
+    @property
+    def langfuse_base_url(self) -> str:
+        return self._config.get('langfuse', {}).get('base_url', 'https://cloud.langfuse.com')
+
+    @property
+    def langfuse_enabled(self) -> bool:
+        return bool(self.langfuse_secret_key and self.langfuse_public_key)
+
 
 # Global config instance
 config = Config()

@@ -2,3 +2,6 @@ openai-agents[litellm]>=0.6.4
 aiogram>=3.24.0
 pyyaml>=6.0
 httpx>=0.28.0
+langfuse>=3.0.0
+openinference-instrumentation-openai-agents>=0.1.0
+opentelemetry-exporter-otlp-proto-http>=1.20.0
