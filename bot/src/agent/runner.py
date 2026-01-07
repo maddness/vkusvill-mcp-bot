@@ -99,16 +99,14 @@ class AgentRunner:
         if len(session.messages) > config.max_history_messages:
             session.messages = session.messages[-config.max_history_messages:]
         
-        settings = ModelSettings(include_usage=True)
-        
         agent = Agent(
             name="VkusVill Assistant",
             model=config.llm_model,
             instructions=SYSTEM_PROMPT,
             tools=self.tools,
-            model_settings=settings,
+            model_settings=ModelSettings(include_usage=True),
         )
-        
+
         # Ограничиваем количество шагов (tool calls) за один запрос
         # Это защищает от злоупотреблений и зацикливания
         max_turns = config.max_turns
@@ -334,17 +332,15 @@ class AgentRunner:
         
         if len(session.messages) > config.max_history_messages:
             session.messages = session.messages[-config.max_history_messages:]
-        
-        settings = ModelSettings(include_usage=True)
-        
+
         agent = Agent(
             name="VkusVill Assistant",
             model=config.llm_model,
             instructions=SYSTEM_PROMPT,
             tools=self.tools,
-            model_settings=settings,
+            model_settings=ModelSettings(include_usage=True),
         )
-        
+
         # Ограничиваем количество шагов (tool calls) за один запрос
         max_turns = config.max_turns
         log.info(f"🔄 Максимум шагов: {max_turns}")
