@@ -27,4 +27,9 @@ bot:
   stream_min_chars: 50  # minimum characters before streaming update
   max_turns: 10  # maximum tool calls per request (prevents abuse)
 
-
+# Optional: Langfuse for tracing and observability
+# Get keys at https://cloud.langfuse.com
+langfuse:
+  secret_key: ""  # sk-lf-... (leave empty to disable)
+  public_key: ""  # pk-lf-...
+  base_url: "https://cloud.langfuse.com"

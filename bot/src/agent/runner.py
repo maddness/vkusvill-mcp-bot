@@ -1,7 +1,9 @@
 """AI Agent Runner"""
+import json
 import time
 import html
 import logging
+import uuid
 import litellm
 from pathlib import Path
 from datetime import datetime
@@ -10,6 +12,15 @@ from typing import Callable, Optional
 
 from ..utils.config import config
 from ..mcp.tools import create_mcp_tools, set_cart_storage
+
+# OpenTelemetry imports for Langfuse tracing (conditional)
+if config.langfuse_enabled:
+    from opentelemetry import baggage, context, trace as otel_trace
+    otel_tracer = otel_trace.get_tracer("vkusvill-bot")
+    otel_enabled = True
+else:
+    otel_tracer = None
+    otel_enabled = False
 
 log = logging.getLogger(__name__)
 
@@ -33,6 +44,7 @@ class SessionData:
         self.last_tokens = None
         self.tools_used = []
         self.cart_products: dict[str, int] = {}  # name -> id mapping for quick lookup
+        self.session_id = str(uuid.uuid4())  # Unique ID for Langfuse tracing
 
 
 class AgentRunner:
@@ -101,27 +113,84 @@ class AgentRunner:
         # Это защищает от злоупотреблений и зацикливания
         max_turns = config.max_turns
         log.info(f"🔄 Максимум шагов: {max_turns}")
-        result = Runner.run_streamed(agent, session.messages, max_turns=max_turns)
-        
-        # Track tool calls
-        async for event in result.stream_events():
-            if event.type == "run_item_stream_event":
-                item = event.item
-                if hasattr(item, 'raw_item') and hasattr(item.raw_item, 'name'):
-                    tool_name = item.raw_item.name
-                    tool_args = getattr(item.raw_item, 'arguments', None) or getattr(item.raw_item, 'input', None) or ''
-                    log.info(f"🔧 Tool call: {tool_name}({tool_args})")
-                    session.tools_used.append(tool_name)
-                    if "search" in tool_name:
-                        await send_progress("🔍 Ищу товары...")
-                    elif "cart" in tool_name:
-                        await send_progress("🛒 Собираю корзину...")
-        
-        final = result.final_output
-        
+
+        # Setup OpenTelemetry baggage for Langfuse tracing
+        otel_ctx = None
+        if otel_enabled:
+            otel_ctx = baggage.set_baggage("langfuse.user.id", str(user_id))
+            otel_ctx = baggage.set_baggage("langfuse.session.id", session.session_id, otel_ctx)
+            otel_ctx = baggage.set_baggage("langfuse.metadata.username", username, otel_ctx)
+            otel_ctx = baggage.set_baggage("langfuse.metadata.thread_id", str(thread_id), otel_ctx)
+            otel_ctx = baggage.set_baggage("langfuse.tags", "vkusvill-bot", otel_ctx)
+
+        ctx_token = context.attach(otel_ctx) if otel_ctx else None
+        final = None
+        try:
+            if otel_tracer:
+                # Use context manager so OpenInference spans become children
+                with otel_tracer.start_as_current_span("chat") as root_span:
+                    root_span.set_attribute("langfuse.trace.input", user_message)
+
+                    result = Runner.run_streamed(agent, session.messages, max_turns=max_turns)
+
+                    # Track tool calls
+                    async for event in result.stream_events():
+                        if event.type == "run_item_stream_event":
+                            item = event.item
+                            if hasattr(item, 'raw_item') and hasattr(item.raw_item, 'name'):
+                                tool_name = item.raw_item.name
+                                tool_args = getattr(item.raw_item, 'arguments', None) or getattr(item.raw_item, 'input', None) or ''
+                                log.info(f"🔧 Tool call: {tool_name}({tool_args})")
+                                session.tools_used.append(tool_name)
+                                if "search" in tool_name:
+                                    await send_progress("🔍 Ищу товары...")
+                                elif "cart" in tool_name:
+                                    await send_progress("🛒 Собираю корзину...")
+
+                    final = result.final_output
+
+                    # Set output and usage on root span
+                    if final:
+                        root_span.set_attribute("langfuse.trace.output", final)
+
+                    # Add usage details with cached tokens
+                    try:
+                        usage = result.context_wrapper.usage
+                        usage_details = {
+                            "input": usage.input_tokens,
+                            "output": usage.output_tokens,
+                            "total": usage.total_tokens
+                        }
+                        if hasattr(usage, 'cache_creation_input_tokens') and usage.cache_creation_input_tokens:
+                            usage_details["cache_creation_input_tokens"] = usage.cache_creation_input_tokens
+                        if hasattr(usage, 'cache_read_input_tokens') and usage.cache_read_input_tokens:
+                            usage_details["cache_read_input_tokens"] = usage.cache_read_input_tokens
+                        root_span.set_attribute("langfuse.observation.usage_details", json.dumps(usage_details))
+                    except:
+                        pass
+            else:
+                # No tracing - run without span
+                result = Runner.run_streamed(agent, session.messages, max_turns=max_turns)
+                async for event in result.stream_events():
+                    if event.type == "run_item_stream_event":
+                        item = event.item
+                        if hasattr(item, 'raw_item') and hasattr(item.raw_item, 'name'):
+                            tool_name = item.raw_item.name
+                            tool_args = getattr(item.raw_item, 'arguments', None) or getattr(item.raw_item, 'input', None) or ''
+                            log.info(f"🔧 Tool call: {tool_name}({tool_args})")
+                            session.tools_used.append(tool_name)
+                            if "search" in tool_name:
+                                await send_progress("🔍 Ищу товары...")
+                            elif "cart" in tool_name:
+                                await send_progress("🛒 Собираю корзину...")
+                final = result.final_output
+        finally:
+            if ctx_token:
+                context.detach(ctx_token)
+
         # Log output
         log.info(f"🔍 Raw output (первые 500 симв.): {repr(final[:500]) if final else 'empty'}")
-        
+
         # Log token usage and save to session
         try:
             usage = result.context_wrapper.usage
@@ -279,27 +348,84 @@ class AgentRunner:
         # Ограничиваем количество шагов (tool calls) за один запрос
         max_turns = config.max_turns
         log.info(f"🔄 Максимум шагов: {max_turns}")
-        result = Runner.run_streamed(agent, session.messages, max_turns=max_turns)
-        
-        # Track tool calls
-        async for event in result.stream_events():
-            if event.type == "run_item_stream_event":
-                item = event.item
-                if hasattr(item, 'raw_item') and hasattr(item.raw_item, 'name'):
-                    tool_name = item.raw_item.name
-                    tool_args = getattr(item.raw_item, 'arguments', None) or getattr(item.raw_item, 'input', None) or ''
-                    log.info(f"🔧 Tool call: {tool_name}({tool_args})")
-                    session.tools_used.append(tool_name)
-                    if "search" in tool_name:
-                        await send_progress("🔍 Ищу товары...")
-                    elif "cart" in tool_name:
-                        await send_progress("🛒 Собираю корзину...")
-        
-        final = result.final_output
-        
+
+        # Setup OpenTelemetry baggage for Langfuse tracing
+        otel_ctx = None
+        if otel_enabled:
+            otel_ctx = baggage.set_baggage("langfuse.user.id", str(user_id))
+            otel_ctx = baggage.set_baggage("langfuse.session.id", session.session_id, otel_ctx)
+            otel_ctx = baggage.set_baggage("langfuse.metadata.username", username, otel_ctx)
+            otel_ctx = baggage.set_baggage("langfuse.metadata.thread_id", str(thread_id), otel_ctx)
+            otel_ctx = baggage.set_baggage("langfuse.tags", "vkusvill-bot,multimodal", otel_ctx)
+
+        ctx_token = context.attach(otel_ctx) if otel_ctx else None
+        final = None
+        try:
+            if otel_tracer:
+                # Use context manager so OpenInference spans become children
+                with otel_tracer.start_as_current_span("chat_with_image") as root_span:
+                    root_span.set_attribute("langfuse.trace.input", f"[IMAGE] {user_message}")
+
+                    result = Runner.run_streamed(agent, session.messages, max_turns=max_turns)
+
+                    # Track tool calls
+                    async for event in result.stream_events():
+                        if event.type == "run_item_stream_event":
+                            item = event.item
+                            if hasattr(item, 'raw_item') and hasattr(item.raw_item, 'name'):
+                                tool_name = item.raw_item.name
+                                tool_args = getattr(item.raw_item, 'arguments', None) or getattr(item.raw_item, 'input', None) or ''
+                                log.info(f"🔧 Tool call: {tool_name}({tool_args})")
+                                session.tools_used.append(tool_name)
+                                if "search" in tool_name:
+                                    await send_progress("🔍 Ищу товары...")
+                                elif "cart" in tool_name:
+                                    await send_progress("🛒 Собираю корзину...")
+
+                    final = result.final_output
+
+                    # Set output and usage on root span
+                    if final:
+                        root_span.set_attribute("langfuse.trace.output", final)
+
+                    # Add usage details with cached tokens
+                    try:
+                        usage = result.context_wrapper.usage
+                        usage_details = {
+                            "input": usage.input_tokens,
+                            "output": usage.output_tokens,
+                            "total": usage.total_tokens
+                        }
+                        if hasattr(usage, 'cache_creation_input_tokens') and usage.cache_creation_input_tokens:
+                            usage_details["cache_creation_input_tokens"] = usage.cache_creation_input_tokens
+                        if hasattr(usage, 'cache_read_input_tokens') and usage.cache_read_input_tokens:
+                            usage_details["cache_read_input_tokens"] = usage.cache_read_input_tokens
+                        root_span.set_attribute("langfuse.observation.usage_details", json.dumps(usage_details))
+                    except:
+                        pass
+            else:
+                # No tracing - run without span
+                result = Runner.run_streamed(agent, session.messages, max_turns=max_turns)
+                async for event in result.stream_events():
+                    if event.type == "run_item_stream_event":
+                        item = event.item
+                        if hasattr(item, 'raw_item') and hasattr(item.raw_item, 'name'):
+                            tool_name = item.raw_item.name
+                            tool_args = getattr(item.raw_item, 'arguments', None) or getattr(item.raw_item, 'input', None) or ''
+                            log.info(f"🔧 Tool call: {tool_name}({tool_args})")
+                            session.tools_used.append(tool_name)
+                            if "search" in tool_name:
+                                await send_progress("🔍 Ищу товары...")
+                            elif "cart" in tool_name:
+                                await send_progress("🛒 Собираю корзину...")
+                final = result.final_output
+        finally:
+            if ctx_token:
+                context.detach(ctx_token)
+
         # Log output
         log.info(f"🔍 Raw output (первые 500 симв.): {repr(final[:500]) if final else 'empty'}")
-        
+
         # Log token usage and save to session
         try:
             usage = result.context_wrapper.usage
@@ -318,7 +444,7 @@ class AgentRunner:
             log.info(f"📊 Токены: input={usage.input_tokens}, output={usage.output_tokens}, total={usage.total_tokens}{cache_info}")
         except:
             pass
-        
+
         # Remove thinking tags
         if "<think>" in final:
             think_end = final.find("</think>")
