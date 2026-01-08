@@ -14,14 +14,13 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT }}
+          port: ${{ secrets.SERVER_PORT }}
           script: |
             cd /home/ubuntu/vkusvill-mcp-bot
-            git fetch origin
-            git reset --hard origin/main
-            sudo docker compose down
-            sudo docker compose up -d --build
+            git pull origin main
+            podman-compose down
+            podman-compose up -d --build
             echo "✅ Deployment completed!"
