@@ -21,6 +21,6 @@ jobs:
           script: |
             cd /home/ubuntu/vkusvill-mcp-bot
             git pull origin main
-            podman-compose down
-            podman-compose up -d --build
+            docker compose down
+            docker compose up -d --build
             echo "✅ Deployment completed!"
