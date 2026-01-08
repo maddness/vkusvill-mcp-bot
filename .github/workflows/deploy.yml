@@ -11,7 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
       - name: Deploy via SSH
+        id: deploy
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -19,8 +23,43 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SERVER_PORT }}
           script: |
+            set -e
             cd /home/ubuntu/vkusvill-mcp-bot
+            
+            echo "📥 Pulling latest code..."
             git pull origin main
+            
+            echo "🛑 Stopping containers..."
             docker compose down
+            
+            echo "🔨 Building and starting containers..."
             docker compose up -d --build
-            echo "✅ Deployment completed!"
+            
+            echo "⏳ Waiting for bot to start..."
+            sleep 10
+            
+            echo "🔍 Checking container status..."
+            if ! docker compose ps | grep -q "vkusvill-bot.*Up"; then
+              echo "❌ Bot container is not running!"
+              docker compose logs --tail=50 vkusvill-bot
+              exit 1
+            fi
+            
+            echo "✅ Deployment completed successfully!"
+            docker compose ps
+      
+      - name: Notify on failure
+        if: failure()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: |
+            ❌ Деплой не удался!
+            
+            Репозиторий: ${{ github.repository }}
+            Ветка: ${{ github.ref_name }}
+            Коммит: ${{ github.sha }}
+            Автор: ${{ github.actor }}
+            
+            Проверьте логи: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import os
+import subprocess
 
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
@@ -81,9 +82,42 @@ else:
     log.info("Langfuse not configured, tracing disabled")
 
 
+def get_git_info() -> tuple[str, str, str]:
+    """
+    Получаем информацию о текущем git коммите.
+    
+    Returns:
+        tuple: (commit_hash, commit_date, branch)
+    """
+    try:
+        commit_hash = subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'],
+            stderr=subprocess.DEVNULL
+        ).decode('utf-8').strip()
+        
+        commit_date = subprocess.check_output(
+            ['git', 'log', '-1', '--format=%cd', '--date=format:%Y-%m-%d %H:%M'],
+            stderr=subprocess.DEVNULL
+        ).decode('utf-8').strip()
+        
+        branch = subprocess.check_output(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            stderr=subprocess.DEVNULL
+        ).decode('utf-8').strip()
+        
+        return commit_hash, commit_date, branch
+    except Exception:
+        return "unknown", "unknown", "unknown"
+
+
 async def on_startup(bot: Bot):
     """Bot startup handler"""
+    # Получаем информацию о коммите
+    commit_hash, commit_date, branch = get_git_info()
+    
     log.info(f"🤖 Модель: {config.llm_model}")
+    log.info(f"📝 Коммит: {commit_hash} ({branch})")
+    log.info(f"📅 Дата: {commit_date}")
     log.info("🚀 Бот запущен")
     
     # Notify admins
@@ -91,7 +125,9 @@ async def on_startup(bot: Bot):
         "🚀 *Бот VkusVill AI запущен!*\n\n"
         "✅ Система готова к работе\n"
         f"🤖 Модель: {config.llm_model.split('/')[-1]}\n"
-        "⚡ Стриминг ответов активирован"
+        "⚡ Стриминг ответов активирован\n\n"
+        f"📝 Коммит: `{commit_hash}` ({branch})\n"
+        f"📅 {commit_date}"
     )
     
     for admin_id in config.admin_ids:
