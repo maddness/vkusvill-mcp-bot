@@ -3,6 +3,10 @@ services:
     build: .
     container_name: vkusvill-bot
     restart: unless-stopped
+    environment:
+      - GIT_COMMIT_HASH=${GIT_COMMIT_HASH:-unknown}
+      - GIT_COMMIT_DATE=${GIT_COMMIT_DATE:-unknown}
+      - GIT_BRANCH=${GIT_BRANCH:-unknown}
     volumes:
       - ./app.py:/app/app.py
       - ./bot:/app/bot

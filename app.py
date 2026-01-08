@@ -82,51 +82,66 @@ else:
     log.info("Langfuse not configured, tracing disabled")
 
 
-def get_git_info() -> tuple[str, str, str]:
+def get_git_info() -> tuple[str, str, str, str]:
     """
-    Получаем информацию о текущем git коммите.
+    Получаем информацию о текущем git коммите из переменных окружения или git.
     
     Returns:
-        tuple: (commit_hash, commit_date, branch)
+        tuple: (commit_hash, commit_date, branch, commit_url)
     """
-    try:
-        commit_hash = subprocess.check_output(
-            ['git', 'rev-parse', '--short', 'HEAD'],
-            stderr=subprocess.DEVNULL
-        ).decode('utf-8').strip()
-        
-        commit_date = subprocess.check_output(
-            ['git', 'log', '-1', '--format=%cd', '--date=format:%Y-%m-%d %H:%M'],
-            stderr=subprocess.DEVNULL
-        ).decode('utf-8').strip()
-        
-        branch = subprocess.check_output(
-            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
-            stderr=subprocess.DEVNULL
-        ).decode('utf-8').strip()
-        
-        return commit_hash, commit_date, branch
-    except Exception:
-        return "unknown", "unknown", "unknown"
+    # Пробуем получить из environment variables (устанавливаются при деплое)
+    commit_hash = os.environ.get('GIT_COMMIT_HASH', '').strip()
+    commit_date = os.environ.get('GIT_COMMIT_DATE', '').strip()
+    branch = os.environ.get('GIT_BRANCH', '').strip()
+    
+    # Если не установлены, пробуем получить из git
+    if not commit_hash or commit_hash == 'unknown':
+        try:
+            commit_hash = subprocess.check_output(
+                ['git', 'rev-parse', '--short', 'HEAD'],
+                stderr=subprocess.DEVNULL
+            ).decode('utf-8').strip()
+            
+            commit_date = subprocess.check_output(
+                ['git', 'log', '-1', '--format=%cd', '--date=format:%Y-%m-%d %H:%M'],
+                stderr=subprocess.DEVNULL
+            ).decode('utf-8').strip()
+            
+            branch = subprocess.check_output(
+                ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                stderr=subprocess.DEVNULL
+            ).decode('utf-8').strip()
+        except Exception:
+            commit_hash = "unknown"
+            commit_date = "unknown"
+            branch = "unknown"
+    
+    # Формируем ссылку на GitHub
+    commit_url = f"https://github.com/maddness/vkusvill-mcp-bot/commit/{commit_hash}" if commit_hash != "unknown" else ""
+    
+    return commit_hash, commit_date, branch, commit_url
 
 
 async def on_startup(bot: Bot):
     """Bot startup handler"""
     # Получаем информацию о коммите
-    commit_hash, commit_date, branch = get_git_info()
+    commit_hash, commit_date, branch, commit_url = get_git_info()
     
     log.info(f"🤖 Модель: {config.llm_model}")
     log.info(f"📝 Коммит: {commit_hash} ({branch})")
     log.info(f"📅 Дата: {commit_date}")
+    if commit_url:
+        log.info(f"🔗 URL: {commit_url}")
     log.info("🚀 Бот запущен")
     
     # Notify admins
+    commit_link = f"[{commit_hash}]({commit_url})" if commit_url else f"`{commit_hash}`"
     startup_message = (
         "🚀 *Бот VkusVill AI запущен!*\n\n"
         "✅ Система готова к работе\n"
         f"🤖 Модель: {config.llm_model.split('/')[-1]}\n"
         "⚡ Стриминг ответов активирован\n\n"
-        f"📝 Коммит: `{commit_hash}` ({branch})\n"
+        f"📝 Коммит: {commit_link} ({branch})\n"
         f"📅 {commit_date}"
     )
     

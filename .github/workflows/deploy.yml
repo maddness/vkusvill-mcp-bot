@@ -32,6 +32,11 @@ jobs:
             echo "🛑 Stopping containers..."
             docker compose down
             
+            echo "🔧 Setting git info for container..."
+            export GIT_COMMIT_HASH=$(git rev-parse --short HEAD)
+            export GIT_COMMIT_DATE=$(git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M')
+            export GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+            
             echo "🔨 Building and starting containers..."
             docker compose up -d --build
             
