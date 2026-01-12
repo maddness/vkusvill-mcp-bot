@@ -18,7 +18,7 @@ async def cmd_start(message: Message):
     thread_id = message.message_thread_id or 0
     agent_runner.reset_session(message.from_user.id, thread_id)
     await message.answer(
-        "Привет! Я помогу собрать корзину продуктов ВкусВилл\\.\n\n"
+        "Привет\\! Я помогу собрать корзину продуктов ВкусВилл\\.\n\n"
         "Напиши что хочешь приготовить или какие продукты нужны\\.\n\n"
         "💡 *Команда:*\n"
         "/new\\_chat \\- Сбросить контекст\n\n"
@@ -91,5 +91,6 @@ async def callback_new_basket(callback: CallbackQuery):
     agent_runner.reset_session(callback.from_user.id, thread_id)
     await callback.answer()
     await callback.message.answer("Начинаем собирать новую корзину! Что приготовим?")
+
 
 

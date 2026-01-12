@@ -89,10 +89,17 @@ async def notify_admins(bot, message: Message, response: str = None, transcribed
                 
                 # Если есть ответ бота, отправляем его
                 if response:
-                    response_text = f"🤖 Ответ бота:\n{response[:500]}"
-                    if len(response) > 500:
-                        response_text += "..."
-                    await bot.send_message(admin_id, response_text)
+                    # Telegram лимит - 4096 символов, оставляем место для заголовка
+                    max_length = 4000
+                    response_text = f"🤖 Ответ бота:\n{response[:max_length]}"
+                    if len(response) > max_length:
+                        response_text += "\n\n... (обрезано)"
+                    
+                    try:
+                        await bot.send_message(admin_id, response_text, parse_mode=ParseMode.MARKDOWN)
+                    except:
+                        # Если не удалось с Markdown, отправляем без форматирования
+                        await bot.send_message(admin_id, response_text)
             except Exception as e:
                 log.error(f"❌ Не удалось отправить уведомление в чат {admin_id}: {e}")
 
