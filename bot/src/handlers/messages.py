@@ -61,6 +61,60 @@ def extract_vkusvill_image(text: str) -> tuple[str | None, str]:
     return None, text
 
 
+def clean_technical_output(text: str) -> str:
+    """Remove technical details like function_calls from agent output"""
+    # Remove <function_calls>...</function_calls> blocks
+    text = re.sub(r'<function_calls>.*?</function_calls>', '', text, flags=re.DOTALL)
+    
+    # Remove blocks that start with [ and contain tool_name
+    text = re.sub(r'\[[\s\S]*?"tool_name"[\s\S]*?\]', '', text, flags=re.MULTILINE)
+    
+    # Remove lines with technical JSON-like structures
+    lines = text.split('\n')
+    cleaned_lines = []
+    in_technical_block = False
+    bracket_count = 0
+    
+    for line in lines:
+        stripped = line.strip()
+        
+        # Detect start of technical block
+        if '"tool_name"' in line or '"arguments"' in line or ('{"query"' in line and '"tool_name"' in text):
+            in_technical_block = True
+            bracket_count = line.count('{') + line.count('[')
+            bracket_count -= line.count('}') + line.count(']')
+            continue
+        
+        # Track brackets in technical block
+        if in_technical_block:
+            bracket_count += line.count('{') + line.count('[')
+            bracket_count -= line.count('}') + line.count(']')
+            if bracket_count <= 0:
+                in_technical_block = False
+            continue
+        
+        # Skip lines that look technical
+        if any(x in line for x in ['"tool_name":', '"arguments":', '{"query":', '"search_products"', '"create_cart"']):
+            continue
+        
+        # Skip empty brackets/braces lines
+        if stripped in ['[', ']', '{', '}', '[{', '}]']:
+            continue
+        
+        # Skip "Ищу товары..." or "Собираю корзину..." technical phrases
+        if stripped.startswith('Ищу товары') or stripped.startswith('Собираю корзину'):
+            if '<function_calls>' in text or 'tool_name' in text:
+                continue
+        
+        cleaned_lines.append(line)
+    
+    # Remove multiple consecutive empty lines
+    result = '\n'.join(cleaned_lines)
+    result = re.sub(r'\n{3,}', '\n\n', result)
+    
+    return result.strip()
+
+
 async def notify_admins(bot, message: Message, response: str = None, transcribed_text: str = None):
     """Notify admins about user request"""
     user_info = f"👤 {message.from_user.full_name}"
@@ -119,6 +173,13 @@ async def handle_message(message: Message):
             return
     
     user_id = message.from_user.id
+    
+    # Проверяем, не забанен ли пользователь
+    if user_db.is_banned(user_id):
+        await message.answer("⛔ Извините, вам ограничен доступ к боту.")
+        log.warning(f"🚫 Попытка доступа забаненного пользователя {user_id}")
+        return
+    
     lock = get_user_lock(user_id)
     
     # Регистрируем пользователя в БД
@@ -239,6 +300,9 @@ async def handle_message(message: Message):
                     [InlineKeyboardButton(text="🛒 Собрать новую корзину", callback_data="new_basket")]
                 ])
 
+            # Clean technical output (remove function_calls, etc)
+            response = clean_technical_output(response)
+            
             # Check for VkusVill product image
             image_url, cleaned_response = extract_vkusvill_image(response)
 
@@ -246,6 +310,13 @@ async def handle_message(message: Message):
             if session_key in agent_runner.sessions:
                 cart = agent_runner.sessions[session_key].cart_products
                 log.info(f"🛒 Корзина пользователя {user_id}: {len(cart)} товаров: {dict(cart)}")
+
+            # Обрезаем слишком длинные ответы (Telegram лимит 4096 символов)
+            MAX_MESSAGE_LENGTH = 4000  # Оставляем запас
+            if len(response) > MAX_MESSAGE_LENGTH:
+                log.warning(f"⚠️ Ответ слишком длинный ({len(response)} символов), обрезаем")
+                response = response[:MAX_MESSAGE_LENGTH] + "\n\n... _(ответ обрезан, слишком длинный)_"
+                cleaned_response = response if not image_url else cleaned_response[:MAX_MESSAGE_LENGTH]
 
             # Final message
             if image_url:
@@ -332,6 +403,13 @@ async def handle_voice(message: Message):
         return
     
     user_id = message.from_user.id
+    
+    # Проверяем, не забанен ли пользователь
+    if user_db.is_banned(user_id):
+        await message.answer("⛔ Извините, вам ограничен доступ к боту.")
+        log.warning(f"🚫 Попытка доступа забаненного пользователя {user_id}")
+        return
+    
     lock = get_user_lock(user_id)
     
     # Регистрируем пользователя в БД
@@ -494,10 +572,19 @@ async def handle_voice(message: Message):
                         [InlineKeyboardButton(text="🛒 Собрать новую корзину", callback_data="new_basket")]
                     ])
 
+                # Clean technical output
+                response = clean_technical_output(response)
+                
                 # Log cart state before sending response
                 if session_key in agent_runner.sessions:
                     cart = agent_runner.sessions[session_key].cart_products
                     log.info(f"🛒 Корзина пользователя {user_id}: {len(cart)} товаров: {dict(cart)}")
+
+                # Обрезаем слишком длинные ответы
+                MAX_MESSAGE_LENGTH = 4000
+                if len(response) > MAX_MESSAGE_LENGTH:
+                    log.warning(f"⚠️ Ответ слишком длинный ({len(response)} символов), обрезаем")
+                    response = response[:MAX_MESSAGE_LENGTH] + "\n\n... _(ответ обрезан, слишком длинный)_"
 
                 # Final message
                 if stream_msg:
@@ -570,6 +657,13 @@ async def handle_photo(message: Message):
         caption = caption[6:].strip()
     
     user_id = message.from_user.id
+    
+    # Проверяем, не забанен ли пользователь
+    if user_db.is_banned(user_id):
+        await message.answer("⛔ Извините, вам ограничен доступ к боту.")
+        log.warning(f"🚫 Попытка доступа забаненного пользователя {user_id}")
+        return
+    
     lock = get_user_lock(user_id)
     
     # Регистрируем пользователя в БД
@@ -688,10 +782,19 @@ async def handle_photo(message: Message):
                     [InlineKeyboardButton(text="🛒 Собрать новую корзину", callback_data="new_basket")]
                 ])
 
+            # Clean technical output
+            response = clean_technical_output(response)
+            
             # Log cart state before sending response
             if session_key in agent_runner.sessions:
                 cart = agent_runner.sessions[session_key].cart_products
                 log.info(f"🛒 Корзина пользователя {user_id}: {len(cart)} товаров: {dict(cart)}")
+
+            # Обрезаем слишком длинные ответы
+            MAX_MESSAGE_LENGTH = 4000
+            if len(response) > MAX_MESSAGE_LENGTH:
+                log.warning(f"⚠️ Ответ слишком длинный ({len(response)} символов), обрезаем")
+                response = response[:MAX_MESSAGE_LENGTH] + "\n\n... _(ответ обрезан, слишком длинный)_"
 
             # Final message
             if stream_msg:

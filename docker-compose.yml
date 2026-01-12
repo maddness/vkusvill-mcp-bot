@@ -1,4 +1,34 @@
 services:
+  vkusvill-postgres:
+    image: postgres:16-alpine
+    container_name: vkusvill-bot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vkusvill
+      POSTGRES_USER: vkusvill
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vkusvill_secret_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # НЕ открываем порт наружу - доступ только внутри Docker сети
+    # ports:
+    #   - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vkusvill"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  adminer:
+    image: adminer:latest
+    container_name: vkusvill-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: vkusvill-postgres
+    depends_on:
+      - vkusvill-postgres
+
   vkusvill-bot:
     build: .
     container_name: vkusvill-bot
@@ -7,6 +37,7 @@ services:
       - GIT_COMMIT_HASH=${GIT_COMMIT_HASH:-unknown}
       - GIT_COMMIT_DATE=${GIT_COMMIT_DATE:-unknown}
       - GIT_BRANCH=${GIT_BRANCH:-unknown}
+      - DATABASE_URL=postgresql://vkusvill:${POSTGRES_PASSWORD:-vkusvill_secret_password}@vkusvill-postgres:5432/vkusvill
     volumes:
       - ./app.py:/app/app.py
       - ./bot:/app/bot
@@ -15,9 +46,15 @@ services:
       - ./logs:/app/logs
       - ./db:/app/db
       - ./assets:/app/assets
+    depends_on:
+      vkusvill-postgres:
+        condition: service_healthy
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
+volumes:
+  postgres_data:
+    driver: local

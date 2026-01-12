@@ -4,6 +4,7 @@ import time
 import html
 import logging
 import uuid
+import warnings
 import litellm
 from pathlib import Path
 from datetime import datetime
@@ -11,7 +12,11 @@ from agents import Agent, Runner, ModelSettings
 from typing import Callable, Optional
 
 from ..utils.config import config
+from ..utils.database import SessionDatabase
 from ..mcp.tools import create_mcp_tools, set_cart_storage
+
+# Отключаем Pydantic serialization warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 
 # OpenTelemetry imports for Langfuse tracing (conditional)
 if config.langfuse_enabled:
@@ -53,6 +58,8 @@ class AgentRunner:
     def __init__(self):
         self.sessions: dict[str, SessionData] = {}  # "user_id:thread_id" -> SessionData
         self.tools = create_mcp_tools(config.mcp_url)
+        self.session_db = SessionDatabase()  # Database for persistent sessions
+        self._load_sessions()  # Load sessions from disk on startup
     
     async def run(
         self,
@@ -68,7 +75,17 @@ class AgentRunner:
         
         session_key = f"{user_id}:{thread_id}"
         if session_key not in self.sessions:
-            self.sessions[session_key] = SessionData()
+            # Try to load session from database
+            session_data = self.session_db.get_session(session_key)
+            if session_data:
+                session = SessionData()
+                session.messages = session_data.get("messages", [])
+                session.cart_products = session_data.get("cart_products", {})
+                session.session_id = session_data.get("session_id", str(uuid.uuid4()))
+                self.sessions[session_key] = session
+                log.info(f"📂 Загружена сессия {session_key} из PostgreSQL ({len(session.messages)} сообщений)")
+            else:
+                self.sessions[session_key] = SessionData()
         
         session = self.sessions[session_key]
 
@@ -280,6 +297,10 @@ class AgentRunner:
         
         session.messages.append({"role": "assistant", "content": final})
         log.info(f"✅ Ответ готов ({len(final)} символов)")
+        
+        # Save session to database
+        self._save_session(session_key)
+        
         return final
     
     async def run_with_image(
@@ -297,7 +318,17 @@ class AgentRunner:
         
         session_key = f"{user_id}:{thread_id}"
         if session_key not in self.sessions:
-            self.sessions[session_key] = SessionData()
+            # Try to load session from database
+            session_data = self.session_db.get_session(session_key)
+            if session_data:
+                session = SessionData()
+                session.messages = session_data.get("messages", [])
+                session.cart_products = session_data.get("cart_products", {})
+                session.session_id = session_data.get("session_id", str(uuid.uuid4()))
+                self.sessions[session_key] = session
+                log.info(f"📂 Загружена сессия {session_key} из PostgreSQL ({len(session.messages)} сообщений)")
+            else:
+                self.sessions[session_key] = SessionData()
         
         session = self.sessions[session_key]
 
@@ -499,10 +530,47 @@ class AgentRunner:
         session.messages.append({"role": "assistant", "content": final})
         
         log.info(f"✅ Ответ готов ({len(final)} символов)")
+        
+        # Save session to database
+        self._save_session(session_key)
+        
         return final
+    
+    def _load_sessions(self):
+        """Sessions are now loaded on-demand from PostgreSQL, not at startup"""
+        log.info(f"📂 Сессии будут загружаться по требованию из PostgreSQL")
+    
+    def _save_session(self, session_key: str):
+        """Save session to database"""
+        try:
+            if session_key in self.sessions:
+                session = self.sessions[session_key]
+                # Filter out multimodal messages (with images) - they can't be serialized easily
+                serializable_messages = []
+                for msg in session.messages:
+                    if isinstance(msg.get("content"), list):
+                        # Skip multimodal messages or convert to text-only
+                        text_parts = [p.get("text", "") for p in msg["content"] if p.get("type") == "input_text"]
+                        if text_parts:
+                            serializable_messages.append({
+                                "role": msg["role"],
+                                "content": " ".join(text_parts)
+                            })
+                    else:
+                        serializable_messages.append(msg)
+                
+                session_data = {
+                    "messages": serializable_messages,
+                    "cart_products": session.cart_products,
+                    "session_id": session.session_id
+                }
+                self.session_db.save_session(session_key, session_data)
+        except Exception as e:
+            log.error(f"❌ Ошибка сохранения сессии {session_key}: {e}")
     
     def reset_session(self, user_id: int, thread_id: int = 0):
         """Reset user session"""
         session_key = f"{user_id}:{thread_id}"
         self.sessions.pop(session_key, None)
+        self.session_db.delete_session(session_key)
 

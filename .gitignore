@@ -22,6 +22,7 @@ wheels/
 
 # Virtual Environment
 venv/
+.venv/
 ENV/
 env/
 
@@ -35,14 +36,17 @@ env/
 # Config
 config.yaml
 .env
+.env.langfuse
+LANGFUSE_CREDENTIALS.md
 
 # Logs
 *.log
 bot.log
 logs/
 
-# Database
+# Database (old JSON files backed up in db_backup_json/)
 db/
+db_backup_json/
 
 # Docker
 .dockerignore
